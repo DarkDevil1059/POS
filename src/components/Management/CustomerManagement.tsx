@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, Save, X } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Save, X, Upload, Download, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Customer } from '../../types';
+import * as XLSX from 'xlsx';
 
 const CustomerManagement: React.FC = () => {
   const { supabaseClient } = useAuth();
@@ -10,6 +11,8 @@ const CustomerManagement: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({ name: '', contact: '' });
+  const [importing, setImporting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -154,6 +157,106 @@ const CustomerManagement: React.FC = () => {
     setFormData({ name: '', contact: '' });
   };
 
+  const downloadTemplate = () => {
+    const templateData = [
+      ['Customer Name', 'Contact'],
+      ['John Doe', 'john@example.com'],
+      ['Jane Smith', '555-0123'],
+      ['Bob Johnson', 'bob@company.com'],
+      ['Walk-in Customer', '']
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Customers Template');
+    XLSX.writeFile(wb, 'customers_template.xlsx');
+  };
+
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const fileData = await file.arrayBuffer();
+      const workbook = XLSX.read(fileData);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      // Skip header row and process data
+      const rows = jsonData.slice(1) as string[][];
+      const validCustomers = [];
+      const errors = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNumber = i + 2; // +2 because we skipped header and arrays are 0-indexed
+        
+        if (!row || row.length < 1) continue; // Skip empty rows
+        
+        const name = row[0]?.toString().trim();
+        const contact = row[1]?.toString().trim() || null;
+        
+        if (!name) {
+          errors.push(`Row ${rowNumber}: Customer name is required`);
+          continue;
+        }
+        
+        // Check for duplicate names in the import
+        if (validCustomers.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+          errors.push(`Row ${rowNumber}: Duplicate customer name "${name}" in import file`);
+          continue;
+        }
+        
+        // Check if customer already exists in database
+        if (customers.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+          errors.push(`Row ${rowNumber}: Customer "${name}" already exists in database`);
+          continue;
+        }
+        
+        validCustomers.push({ name, contact });
+      }
+
+      if (errors.length > 0) {
+        alert(`Import errors found:\n\n${errors.join('\n')}\n\nPlease fix these issues and try again.`);
+        return;
+      }
+
+      if (validCustomers.length === 0) {
+        alert('No valid customers found in the file. Please check your Excel file format.');
+        return;
+      }
+
+      // Import valid customers
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const customersToInsert = validCustomers.map(customer => ({
+        ...customer,
+        user_id: user.id
+      }));
+
+      const { data: insertedData, error } = await supabaseClient
+        .from('customers')
+        .insert(customersToInsert)
+        .select();
+
+      if (error) throw error;
+
+      setCustomers([...customers, ...insertedData]);
+      setShowImportModal(false);
+      alert(`Successfully imported ${validCustomers.length} customers!`);
+      
+    } catch (error) {
+      console.error('Error importing customers:', error);
+      alert(`Error importing customers: ${error.message || 'Unknown error'}`);
+    } finally {
+      setImporting(false);
+      // Reset file input
+      event.target.value = '';
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-8">
@@ -178,14 +281,91 @@ const CustomerManagement: React.FC = () => {
             </div>
           </div>
           
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Customer
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              Import Excel
+            </button>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Customer
+            </button>
+          </div>
         </div>
+
+        {/* Import Modal */}
+        {showImportModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Import Customers from Excel</h3>
+              
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-800">Excel Format Required</span>
+                  </div>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Your Excel file should have these columns:
+                  </p>
+                  <div className="bg-white rounded border p-2 text-xs font-mono">
+                    <div className="grid grid-cols-2 gap-4 font-bold border-b pb-1 mb-1">
+                      <span>Customer Name</span>
+                      <span>Contact</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-gray-600">
+                      <span>John Doe</span>
+                      <span>john@example.com</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={downloadTemplate}
+                  className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Template
+                </button>
+
+                <div className="border-t border-gray-200 pt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Excel File
+                  </label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileImport}
+                    disabled={importing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+                  />
+                  {importing && (
+                    <div className="flex items-center gap-2 mt-2 text-sm text-blue-600">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      Importing customers...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-6">
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  disabled={importing}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Add Form */}
         {showAddForm && (

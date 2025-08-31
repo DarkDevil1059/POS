@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Edit, Trash2, Save, X, DollarSign } from 'lucide-react';
+import { Briefcase, Plus, Edit, Trash2, Save, X, DollarSign, Upload, Download, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Service } from '../../types';
+import * as XLSX from 'xlsx';
 
 const ServiceManagement: React.FC = () => {
   const { supabaseClient } = useAuth();
@@ -10,6 +11,8 @@ const ServiceManagement: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({ name: '', price: '' });
+  const [importing, setImporting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   useEffect(() => {
     fetchServices();
@@ -156,6 +159,112 @@ const ServiceManagement: React.FC = () => {
     }
   };
 
+  const downloadTemplate = () => {
+    const templateData = [
+      ['Service Name', 'Price'],
+      ['Haircut', '25.00'],
+      ['Hair Wash', '15.00'],
+      ['Styling', '35.00'],
+      ['Color Treatment', '75.00']
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Services Template');
+    XLSX.writeFile(wb, 'services_template.xlsx');
+  };
+
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const fileData = await file.arrayBuffer();
+      const workbook = XLSX.read(fileData);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      // Skip header row and process data
+      const rows = jsonData.slice(1) as string[][];
+      const validServices = [];
+      const errors = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNumber = i + 2; // +2 because we skipped header and arrays are 0-indexed
+        
+        if (!row || row.length < 2) continue; // Skip empty rows
+        
+        const name = row[0]?.toString().trim();
+        const priceStr = row[1]?.toString().trim();
+        
+        if (!name) {
+          errors.push(`Row ${rowNumber}: Service name is required`);
+          continue;
+        }
+        
+        const price = parseFloat(priceStr);
+        if (isNaN(price) || price < 0) {
+          errors.push(`Row ${rowNumber}: Invalid price "${priceStr}". Must be a positive number.`);
+          continue;
+        }
+        
+        // Check for duplicate names in the import
+        if (validServices.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+          errors.push(`Row ${rowNumber}: Duplicate service name "${name}" in import file`);
+          continue;
+        }
+        
+        // Check if service already exists in database
+        if (services.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+          errors.push(`Row ${rowNumber}: Service "${name}" already exists in database`);
+          continue;
+        }
+        
+        validServices.push({ name, price });
+      }
+
+      if (errors.length > 0) {
+        alert(`Import errors found:\n\n${errors.join('\n')}\n\nPlease fix these issues and try again.`);
+        return;
+      }
+
+      if (validServices.length === 0) {
+        alert('No valid services found in the file. Please check your Excel file format.');
+        return;
+      }
+
+      // Import valid services
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const servicesToInsert = validServices.map(service => ({
+        ...service,
+        user_id: user.id
+      }));
+
+      const { data, error } = await supabaseClient
+        .from('services')
+        .insert(servicesToInsert)
+        .select();
+
+      if (error) throw error;
+
+      setServices([...services, ...data]);
+      setShowImportModal(false);
+      alert(`Successfully imported ${validServices.length} services!`);
+      
+    } catch (error) {
+      console.error('Error importing services:', error);
+      alert(`Error importing services: ${error.message || 'Unknown error'}`);
+    } finally {
+      setImporting(false);
+      // Reset file input
+      event.target.value = '';
+    }
+  };
+
   const cancelEdit = () => {
     setEditingId(null);
     setShowAddForm(false);
@@ -186,14 +295,91 @@ const ServiceManagement: React.FC = () => {
             </div>
           </div>
           
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Service
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              Import Excel
+            </button>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Service
+            </button>
+          </div>
         </div>
+
+        {/* Import Modal */}
+        {showImportModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Import Services from Excel</h3>
+              
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-800">Excel Format Required</span>
+                  </div>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Your Excel file should have these columns:
+                  </p>
+                  <div className="bg-white rounded border p-2 text-xs font-mono">
+                    <div className="grid grid-cols-2 gap-4 font-bold border-b pb-1 mb-1">
+                      <span>Service Name</span>
+                      <span>Price</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-gray-600">
+                      <span>Haircut</span>
+                      <span>25.00</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={downloadTemplate}
+                  className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Template
+                </button>
+
+                <div className="border-t border-gray-200 pt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Excel File
+                  </label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileImport}
+                    disabled={importing}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                  />
+                  {importing && (
+                    <div className="flex items-center gap-2 mt-2 text-sm text-blue-600">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      Importing services...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-6">
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  disabled={importing}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Add Form */}
         {showAddForm && (
