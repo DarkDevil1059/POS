@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, ShoppingCart, Printer, Check, Percent, Search, Minus } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, User, ShoppingBag, Receipt, Search, Plus, Minus, X, FileText, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Customer, Staff, Service, SaleItem } from '../../types';
 
@@ -9,41 +9,28 @@ const POSScreen: React.FC = () => {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   
+  // Wizard state
+  const [currentStep, setCurrentStep] = useState(1);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedServices, setSelectedServices] = useState<SaleItem[]>([]);
-  const [discountPercentage, setDiscountPercentage] = useState(0);
-  const [discountAmount, setDiscountAmount] = useState(0);
-  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
+  const [overallDiscount, setOverallDiscount] = useState({ type: 'percentage' as 'percentage' | 'amount', value: 0 });
   
+  // UI state
   const [customerSearch, setCustomerSearch] = useState('');
   const [serviceSearch, setServiceSearch] = useState('');
-  const [staffSearch, setStaffSearch] = useState('');
-  
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerContact, setNewCustomerContact] = useState('');
   const [showAddCustomer, setShowAddCustomer] = useState(false);
-  
   const [loading, setLoading] = useState(false);
-  const [saleCompleted, setSaleCompleted] = useState(false);
-  const [lastSale, setLastSale] = useState<any>(null);
+  const [paymentMode, setPaymentMode] = useState('cash');
+  
+  // Post-sale popup state
+  const [showSaleCompleteModal, setShowSaleCompleteModal] = useState(false);
+  const [completedSale, setCompletedSale] = useState<any>(null);
 
   useEffect(() => {
     fetchData();
   }, []);
-
-  // Filter functions
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    (customer.contact && customer.contact.toLowerCase().includes(customerSearch.toLowerCase()))
-  );
-
-  const filteredServices = services.filter(service =>
-    service.name.toLowerCase().includes(serviceSearch.toLowerCase())
-  );
-
-  const filteredStaff = staff.filter(member =>
-    member.name.toLowerCase().includes(staffSearch.toLowerCase())
-  );
 
   const fetchData = async () => {
     try {
@@ -109,11 +96,8 @@ const POSScreen: React.FC = () => {
         service_name: service.name,
         price: service.price,
         quantity: 1,
-        staff_id: null,
-        staff_name: null,
-        discount_percentage: 0,
-        discount_amount: 0,
-        discount_type: 'percentage'
+        staff_id: staff[0]?.id || null,
+        staff_name: staff[0]?.name || null,
       };
       setSelectedServices([...selectedServices, newItem]);
     }
@@ -150,807 +134,966 @@ const POSScreen: React.FC = () => {
     ));
   };
 
-  const updateServiceDiscount = (serviceId: string, discountType: 'percentage' | 'amount', value: number) => {
-    setSelectedServices(selectedServices.map(item => {
-      if (item.service_id === serviceId) {
-        const itemSubtotal = item.price * item.quantity;
-        
-        if (discountType === 'percentage') {
-          return {
-            ...item,
-            discount_type: 'percentage',
-            discount_percentage: Math.min(100, Math.max(0, value)),
-            discount_amount: 0
-          };
-        } else {
-          return {
-            ...item,
-            discount_type: 'amount',
-            discount_amount: Math.min(itemSubtotal, Math.max(0, value)),
-            discount_percentage: 0
-          };
-        }
-      }
-      return item;
-    }));
+  const updateServiceDiscount = (serviceId: string, discountType: 'percentage' | 'amount', discountValue: number) => {
+    setSelectedServices(selectedServices.map(item =>
+      item.service_id === serviceId
+        ? { 
+            ...item, 
+            discount_type: discountType,
+            discount_percentage: discountType === 'percentage' ? discountValue : undefined,
+            discount_amount: discountType === 'amount' ? discountValue : undefined
+          }
+        : item
+    ));
   };
 
-  const getServiceDiscountedPrice = (item: SaleItem) => {
-    const itemSubtotal = item.price * item.quantity;
-    let itemDiscount = 0;
+  const getServiceDiscountedPrice = (item: SaleItem): number => {
+    let discountedPrice = item.price;
     
-    if (item.discount_type === 'percentage') {
-      itemDiscount = (itemSubtotal * (item.discount_percentage || 0)) / 100;
-    } else {
-      itemDiscount = item.discount_amount || 0;
+    if (item.discount_type === 'percentage' && item.discount_percentage) {
+      discountedPrice = item.price * (1 - item.discount_percentage / 100);
+    } else if (item.discount_type === 'amount' && item.discount_amount) {
+      discountedPrice = Math.max(0, item.price - item.discount_amount);
     }
     
-    return Math.max(0, itemSubtotal - itemDiscount);
+    return discountedPrice;
   };
+
   const completeSale = async () => {
-    // Validation
-    if (!selectedCustomer) {
-      alert('Please select a customer');
-      return;
-    }
-
-    if (selectedServices.length === 0) {
-      alert('Please add at least one service');
-      return;
-    }
-
-    const unassignedServices = selectedServices.filter(item => !item.staff_id);
-    if (unassignedServices.length > 0) {
-      alert('Please assign staff to all services');
-      return;
-    }
-
     setLoading(true);
     try {
-      // Calculate totals with service-level discounts
-      const overallSubtotal = selectedServices.reduce((sum, item) => sum + getServiceDiscountedPrice(item), 0);
-      const totalDiscountAmount = discountType === 'percentage' 
-        ? (overallSubtotal * discountPercentage) / 100 
-        : discountAmount;
-      const grandTotal = Math.max(0, overallSubtotal - totalDiscountAmount);
-
-      console.log('Starting sale completion process...');
-      console.log('Selected services:', selectedServices);
-      console.log('Selected customer:', selectedCustomer);
-
       const { data: { user } } = await supabaseClient.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Create individual sale records
-      const individualSaleRecords = [];
+      // Calculate subtotal (without any discounts)
+      const subtotal = selectedServices.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       
+      // Calculate service-level discounts
+      const serviceDiscountTotal = selectedServices.reduce((sum, item) => {
+        const originalTotal = item.price * item.quantity;
+        const discountedTotal = getServiceDiscountedPrice(item) * item.quantity;
+        return sum + (originalTotal - discountedTotal);
+      }, 0);
+      
+      // Calculate subtotal after service discounts
+      const subtotalAfterServiceDiscounts = subtotal - serviceDiscountTotal;
+      
+      // Calculate overall discount
+      let overallDiscountAmount = 0;
+      if (overallDiscount.value > 0) {
+        if (overallDiscount.type === 'percentage') {
+          overallDiscountAmount = subtotalAfterServiceDiscounts * (overallDiscount.value / 100);
+        } else {
+          overallDiscountAmount = Math.min(overallDiscount.value, subtotalAfterServiceDiscounts);
+        }
+      }
+      
+      const finalTotal = Math.max(0, subtotalAfterServiceDiscounts - overallDiscountAmount);
+
+      // Store sale data for the popup
+      const saleData = {
+        customer: selectedCustomer,
+        services: selectedServices,
+        subtotal,
+        serviceDiscountTotal,
+        overallDiscountAmount,
+        finalTotal,
+        date: new Date().toISOString()
+      };
+
+      // Create individual sale records for each service
       for (const serviceItem of selectedServices) {
-        const serviceDiscountedPrice = getServiceDiscountedPrice(serviceItem) / serviceItem.quantity;
+        const serviceDiscountedPrice = getServiceDiscountedPrice(serviceItem);
+        const serviceSubtotal = serviceDiscountedPrice * serviceItem.quantity;
+        
+        // Calculate proportional overall discount for this service
+        const serviceOverallDiscount = subtotalAfterServiceDiscounts > 0 ? (serviceSubtotal / subtotalAfterServiceDiscounts) * overallDiscountAmount : 0;
+        const serviceFinalPrice = Math.max(0, serviceDiscountedPrice - (serviceOverallDiscount / serviceItem.quantity));
         
         for (let i = 0; i < serviceItem.quantity; i++) {
-          const itemSubtotal = serviceDiscountedPrice;
-          const itemProportionalDiscount = (itemSubtotal / overallSubtotal) * totalDiscountAmount;
-          const itemFinalTotal = Math.max(0, itemSubtotal - itemProportionalDiscount);
-
-          console.log(`Processing service ${serviceItem.service_name}, quantity ${i + 1}/${serviceItem.quantity}`);
-
-          const saleData = {
-            customer_id: selectedCustomer.id,
+          const individualSaleData = {
+            customer_id: selectedCustomer!.id,
             staff_id: serviceItem.staff_id,
             service_id: serviceItem.service_id,
-            total: itemFinalTotal,
+            total: serviceFinalPrice,
             date: new Date().toISOString(),
             user_id: user.id,
+            discount_amount: (serviceItem.discount_amount || 0) + (serviceOverallDiscount / serviceItem.quantity),
+            payment_mode: paymentMode
           };
 
-
-          console.log('Sale data to insert:', saleData);
-
-          const { data, error } = await supabaseClient
+          const { error } = await supabaseClient
             .from('sales')
-            .insert([saleData])
-            .select('*')
-            .single();
+            .insert([individualSaleData]);
 
-          if (error) {
-            console.error('Database error:', error);
-            throw new Error(`Database error: ${error.message || 'Unknown database error'}`);
-          }
-
-          individualSaleRecords.push(data);
+          if (error) throw error;
         }
       }
 
-      // Create summary for lastSale
-      const salesSummary = {
-        id: 'summary',
-        customer_id: selectedCustomer.id,
-        total: grandTotal,
-        date: new Date().toISOString(),
-        customers: selectedCustomer,
-        selected_services: selectedServices,
-        selected_staff: staff,
-        individual_records: individualSaleRecords
-      };
-
-      setLastSale(salesSummary);
-      setSaleCompleted(true);
+      // Show completion modal instead of alert
+      setCompletedSale(saleData);
+      setShowSaleCompleteModal(true);
       
-      // Reset form
-      console.log('Sale completed successfully');
-      setSelectedCustomer(null);
-      setSelectedServices([]);
-      setDiscountPercentage(0);
-      setDiscountAmount(0);
     } catch (error) {
-      console.error('Detailed error completing sale:', error);
-      
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : `Unknown error: ${JSON.stringify(error)}`;
-      
-      alert(`Error completing sale: ${errorMessage}`);
+      console.error('Error completing sale:', error);
+      alert(`Error completing sale: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const printReceipt = () => {
-    if (!lastSale) return;
-
-    // Enhanced data validation
-    if (!lastSale.customers) {
-      alert('Error: Customer information is missing. Cannot print receipt.');
-      return;
-    }
-
-    if (!lastSale.selected_services || lastSale.selected_services.length === 0) {
-      alert('Error: Service information is missing. Cannot print receipt.');
-      return;
-    }
-
-    // Validate that all selected services have required data
-    const invalidServices = lastSale.selected_services.filter((item: SaleItem) => 
-      !item.service_name || !item.staff_name || item.price === undefined
-    );
-
-    if (invalidServices.length > 0) {
-      alert('Error: Some service information is incomplete. Cannot print receipt.');
-      return;
-    }
-
-    try {
-      // Create receipt content first
-      const receiptContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Receipt</title>
-  <style>
-    body {
-      font-family: 'Courier New', monospace;
-      margin: 0;
-      padding: 20px;
-      background: white;
-    }
-    .receipt {
-      max-width: 300px;
-      margin: 0 auto;
-      background: white;
-    }
-    .header {
-      text-align: center;
-      border-bottom: 2px solid #000;
-      padding-bottom: 10px;
-      margin-bottom: 15px;
-    }
-    .header h2 {
-      margin: 0;
-      font-size: 18px;
-    }
-    .header p {
-      margin: 5px 0;
-      font-size: 14px;
-    }
-    .section {
-      margin-bottom: 15px;
-    }
-    .section p {
-      margin: 3px 0;
-      font-size: 12px;
-    }
-    .items {
-      border-top: 1px solid #000;
-      padding-top: 10px;
-      margin-bottom: 15px;
-    }
-    .item {
-      margin-bottom: 8px;
-      padding-bottom: 8px;
-      border-bottom: 1px dashed #ccc;
-    }
-    .item:last-child {
-      border-bottom: none;
-    }
-    .discount {
-      border-top: 1px solid #000;
-      padding-top: 10px;
-      margin-bottom: 15px;
-    }
-    .total {
-      border-top: 2px solid #000;
-      padding-top: 10px;
-      text-align: right;
-    }
-    .total p {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 0;
-    }
-    .footer {
-      text-align: center;
-      margin-top: 20px;
-      font-size: 10px;
-    }
-    @media print {
-      body { margin: 0; padding: 10px; }
-      .receipt { max-width: none; }
-    }
-  </style>
-</head>
-<body>
-  <div class="receipt">
-    <div class="header">
-      <h2>SALON7</h2>
-      <p>RECEIPT</p>
-      <p>Professional Beauty Services</p>
-    </div>
-    
-    <div class="section">
-      <p><strong>Date:</strong> ${new Date(lastSale.date).toLocaleDateString()}</p>
-      <p><strong>Time:</strong> ${new Date(lastSale.date).toLocaleTimeString()}</p>
-      <p><strong>Transaction:</strong> Summary Sale</p>
-    </div>
-    
-    <div class="section">
-      <p><strong>Customer:</strong> ${lastSale.customers?.name || 'Walk-in Customer'}</p>
-      <p><strong>Contact:</strong> ${lastSale.customers?.contact || 'N/A'}</p>
-    </div>
-    
-    <div class="items">
-      <p><strong>Services:</strong></p>
-      ${lastSale.selected_services?.map((item: SaleItem) => `
-        <div class="item">
-          <p>${item.service_name} x${item.quantity}</p>
-          <p>Staff: ${item.staff_name}</p>
-          <p>₹${getServiceDiscountedPrice(item).toFixed(2)}</p>
-          ${((item.discount_percentage || 0) > 0 || (item.discount_amount || 0) > 0) ? `
-          <p style="color: #666; font-size: 10px;">Service discount applied</p>
-          ` : ''}
-        </div>
-      `).join('') || ''}
-      <p><strong>Subtotal:</strong> ₹${(lastSale.total + (lastSale.discount_amount || 0)).toFixed(2)}</p>
-    </div>
-    
-    ${lastSale.discount_amount > 0 ? `
-    <div class="discount">
-      <p><strong>Discount:</strong> -₹${Number(lastSale.discount_amount || 0).toFixed(2)}</p>
-    </div>
-    ` : ''}
-    
-    <div class="total">
-      <p>TOTAL: ₹${Number(lastSale.total || 0).toFixed(2)}</p>
-    </div>
-    
-    <div class="footer">
-      <p>Thank you for your business!</p>
-    </div>
-  </div>
-</body>
-</html>`;
-
-      // Open print window immediately and synchronously
-      const printWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');
-      
-      if (!printWindow) {
-        // Fallback: try to print using a different approach
-        const printFrame = document.createElement('iframe');
-        printFrame.style.position = 'absolute';
-        printFrame.style.top = '-1000px';
-        printFrame.style.left = '-1000px';
-        printFrame.style.width = '1px';
-        printFrame.style.height = '1px';
-        printFrame.style.border = 'none';
-        
-        document.body.appendChild(printFrame);
-        
-        if (printFrame.contentWindow) {
-          printFrame.contentWindow.document.open();
-          printFrame.contentWindow.document.write(receiptContent);
-          printFrame.contentWindow.document.close();
-          
-          // Wait a moment for content to load, then print
-          setTimeout(() => {
-            try {
-              printFrame.contentWindow?.focus();
-              printFrame.contentWindow?.print();
-              
-              // Clean up after printing
-              setTimeout(() => {
-                document.body.removeChild(printFrame);
-              }, 1000);
-            } catch (error) {
-              console.error('Error printing with iframe:', error);
-              document.body.removeChild(printFrame);
-              alert('Unable to print receipt. Please try copying the receipt content manually.');
-            }
-          }, 100);
-        } else {
-          document.body.removeChild(printFrame);
-          alert('Unable to print receipt. Your browser may be blocking print operations.');
-        }
-        return;
-      }
-
-      try {
-        // Write content and close document immediately
-        printWindow.document.open();
-        printWindow.document.write(receiptContent);
-        printWindow.document.close();
-        
-        // Focus and print immediately after document is ready
-        printWindow.focus();
-        
-        // Use a very short delay to ensure content is rendered
-        setTimeout(() => {
-          try {
-            printWindow.print();
-            
-            // Close the window after printing (optional)
-            printWindow.addEventListener('afterprint', () => {
-              printWindow.close();
-            });
-            
-            // Fallback to close window after 3 seconds if afterprint doesn't fire
-            setTimeout(() => {
-              if (!printWindow.closed) {
-                printWindow.close();
-              }
-            }, 3000);
-          } catch (printError) {
-            console.error('Error during print:', printError);
-            alert('Error occurred while printing. The print window is open - you can manually print using Ctrl+P.');
-          }
-        }, 50);
-        
-      } catch (documentError) {
-        console.error('Error writing to print window:', documentError);
-        alert('Error preparing receipt for printing. Please try again.');
-        if (printWindow && !printWindow.closed) {
-          printWindow.close();
-        }
-      }
-    } catch (error) {
-      console.error('Error in printReceipt function:', error);
-      alert('An unexpected error occurred while preparing the receipt. Please try again.');
-    }
-  };
-
-  const resetSale = () => {
-    setSaleCompleted(false);
-    setLastSale(null);
-    setDiscountPercentage(0);
-    setDiscountAmount(0);
+  const resetPOS = () => {
+    setCurrentStep(1);
+    setSelectedCustomer(null);
+    setSelectedServices([]);
+    setOverallDiscount({ type: 'percentage', value: 0 });
     setCustomerSearch('');
     setServiceSearch('');
-    setStaffSearch('');
+    setShowAddCustomer(false);
+    setShowSaleCompleteModal(false);
+    setCompletedSale(null);
+    setPaymentMode('cash');
   };
 
-  if (saleCompleted && lastSale) {
-    return (
-      <div className="p-8">
-        <div className="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
-            <Check className="w-8 h-8 text-green-600" />
+  
+const printReceipt = () => {
+  if (!completedSale) {
+    alert("No sale data available to print.");
+    return;
+  }
+
+  try {
+    const services = completedSale.services || [];
+    const customer = completedSale.customer || {};
+
+    const receiptRows = services.map((item) => {
+      const originalTotal = item.price * item.quantity;
+      const discountedPrice =
+        item.discount_type === "percentage"
+          ? item.price * (1 - (item.discount_percentage || 0) / 100)
+          : item.discount_type === "amount"
+          ? Math.max(0, item.price - (item.discount_amount || 0))
+          : item.price;
+
+      const lineTotal = discountedPrice * item.quantity;
+      const discountShown = originalTotal - lineTotal;
+
+      return `
+        <tr>
+          <td>${item.service_name || ""}</td>
+          <td>₹${(item.price || 0).toFixed(2)}</td>
+          <td>${item.quantity || 0}</td>
+          <td>₹${discountShown.toFixed(2)}</td>
+          <td>₹${lineTotal.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join("");
+
+const receiptContent = `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Invoice</title>
+    <style>
+      @page { size: 100mm auto; margin: 0; }
+      body { font-family: 'Poppins', sans-serif; margin: 0; padding: 14px; }
+      .receipt { width: 100mm; font-size: 14px; }
+      .center { text-align: center; }
+      .shop-name { font-weight: 900; text-transform: uppercase; font-size: 16px; margin-bottom: 8px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+      th, td { 
+        padding: 8px 4px;  /* was 5px → more vertical space */
+        border-bottom: 1px dashed #000; 
+      }
+      .totals { margin-top: 12px; text-align: right; font-size: 13px; }
+      .grand-total { font-size: 18px; font-weight: 700; text-align: right; margin-top: 12px; }
+      hr { border: none; border-top: 1px dashed #000; margin: 10px 0; }
+      .section { margin-bottom: 8px; }
+      .bold-line { border: none; border-top: 2px solid #000; margin: 8px 0; }
+    </style>
+  </head>
+  <body onload="window.print()">
+    <div class="receipt">
+      <div class="center">
+        <div class="shop-name">SALON7</div>
+        51, Gajapathy St, Shenoy Nagar, Chennai–30<br/>
+        Contact: 044 3555 4106, 9840722893
+      </div>
+      <hr />
+      <div class="section">
+        <strong>Invoice To:</strong><br/>
+        ${customer.name || "Walk-in Customer"}<br/>
+        ${customer.contact || ""}
+      </div>
+      <div class="section">
+        <strong>Payment Mode:</strong> ${completedSale.paymentMode || "Cash"}
+      </div>
+      <div class="section">
+        <strong>Date:</strong> ${completedSale.date ? new Date(completedSale.date).toLocaleDateString() : ""}<br/>
+        <strong>Time:</strong> ${completedSale.date ? new Date(completedSale.date).toLocaleTimeString() : ""}<br/>
+      </div>
+      <hr />
+      <table>
+        <thead>
+          <tr><th>Service</th><th>Price</th><th>Qty</th><th>Disc</th><th>Total</th></tr>
+        </thead>
+        <tbody>
+          ${receiptRows}
+        </tbody>
+      </table>
+      <div class="totals">
+        Sub Total: ₹${(completedSale.subtotal || 0).toFixed(2)}<br/>
+        ${completedSale.serviceDiscountTotal > 0 ? `Service Discounts: ₹${completedSale.serviceDiscountTotal.toFixed(2)}<br/>` : ""}
+        ${completedSale.overallDiscountAmount > 0 ? `Overall Discount: ₹${completedSale.overallDiscountAmount.toFixed(2)}<br/>` : ""}
+      </div>
+      <hr class="bold-line" />
+      <div class="grand-total">
+        Grand Total: ₹${(completedSale.finalTotal || 0).toFixed(2)}
+      </div>
+      <div class="center" style="margin-top:12px;"><strong>Thank you for visiting Salon 7</strong></div>
+    </div>
+  </body>
+  </html>
+`;
+
+
+    const printWindow = window.open("", "_blank", "width=400,height=600");
+    if (!printWindow) {
+      alert("Unable to open print window. Please check your browser settings.");
+      return;
+    }
+
+    printWindow.document.write(receiptContent);
+    printWindow.document.close();
+    printWindow.focus();
+  } catch (error) {
+    console.error("Error printing receipt:", error);
+    alert("An unexpected error occurred while preparing the receipt.");
+  }
+};
+
+
+  const nextStep = () => {
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const canProceedFromStep1 = selectedCustomer !== null;
+  const canProceedFromStep2 = selectedServices.length > 0 && selectedServices.every(item => item.staff_id);
+
+  const filteredCustomers = customers.filter(customer =>
+    customer.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    (customer.contact && customer.contact.toLowerCase().includes(customerSearch.toLowerCase()))
+  );
+
+  const filteredServices = services.filter(service =>
+    service.name.toLowerCase().includes(serviceSearch.toLowerCase())
+  );
+
+  // Calculate subtotal (original prices without any discounts)
+  const subtotal = selectedServices.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  
+  // Calculate service-level discounts
+  const serviceDiscountTotal = selectedServices.reduce((sum, item) => {
+    const originalTotal = item.price * item.quantity;
+    const discountedTotal = getServiceDiscountedPrice(item) * item.quantity;
+    return sum + (originalTotal - discountedTotal);
+  }, 0);
+  
+  // Calculate subtotal after service discounts
+  const subtotalAfterServiceDiscounts = subtotal - serviceDiscountTotal;
+  
+  // Calculate overall discount
+  const overallDiscountAmount = overallDiscount.value > 0 
+    ? overallDiscount.type === 'percentage' 
+      ? subtotalAfterServiceDiscounts * (overallDiscount.value / 100)
+      : Math.min(overallDiscount.value, subtotalAfterServiceDiscounts)
+    : 0;
+    
+  const finalTotal = Math.max(0, subtotalAfterServiceDiscounts - overallDiscountAmount);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <div className="p-4 md:p-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Point of Sale
+            </h1>
+            <p className="text-gray-600">Complete your sale in 3 simple steps</p>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Sale Completed!</h2>
-          <div className="text-left space-y-2 mb-6 p-4 bg-gray-50 rounded-lg">
-            <p><strong>Customer:</strong> {lastSale.customers?.name}</p>
-            <div className="space-y-1">
-              <p><strong>Services:</strong></p>
-              {lastSale.selected_services?.map((item: SaleItem, index: number) => (
-                <div key={index} className="ml-4 text-sm">
-                  <p>• {item.service_name} x{item.quantity} - {item.staff_name}</p>
+
+          {/* Progress Indicator */}
+          <div className="mb-8">
+            <div className="flex items-center justify-center space-x-4">
+              {[1, 2, 3].map((step) => (
+                <div key={step} className="flex items-center">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold transition-all duration-300 ${
+                    step === currentStep 
+                      ? 'bg-blue-600 text-white shadow-lg scale-110' 
+                      : step < currentStep 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {step < currentStep ? <Check className="w-5 h-5" /> : step}
+                  </div>
+                  {step < 3 && (
+                    <div className={`w-16 h-1 mx-2 transition-all duration-300 ${
+                      step < currentStep ? 'bg-green-500' : 'bg-gray-200'
+                    }`} />
+                  )}
                 </div>
               ))}
             </div>
-            {lastSale.discount_amount > 0 && (
-              <p><strong>Discount:</strong> -₹{Number(lastSale.discount_amount).toFixed(2)}</p>
-            )}
-            <p><strong>Total:</strong> ₹{Number(lastSale.total).toFixed(2)}</p>
+            <div className="flex justify-center mt-4">
+              <div className="text-sm font-medium text-gray-600">
+                Step {currentStep} of 3: {
+                  currentStep === 1 ? 'Select Customer' :
+                  currentStep === 2 ? 'Add Services' :
+                  'Review & Confirm'
+                }
+              </div>
+            </div>
           </div>
-          <div className="space-y-3">
-            <button
-              onClick={printReceipt}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-            >
-              <Printer className="w-5 h-5" />
-              Print Receipt
-            </button>
-            <button
-              onClick={resetSale}
-              className="w-full bg-gray-600 text-white py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors"
-            >
-              New Sale
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  const subtotal = selectedServices.reduce((sum, item) => sum + getServiceDiscountedPrice(item), 0);
-  const finalDiscountAmount = discountType === 'percentage' 
-    ? (subtotal * discountPercentage) / 100 
-    : discountAmount;
-  const total = Math.max(0, subtotal - finalDiscountAmount);
-
-  return (
-    <div className="h-screen flex flex-col">
-      <div className="p-8 pb-4">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="bg-blue-100 rounded-lg p-2">
-            <ShoppingCart className="w-6 h-6 text-blue-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Point of Sale</h1>
-        </div>
-      </div>
-
-      <div className="flex-1 px-8 pb-8 overflow-hidden">
-        <div className="grid lg:grid-cols-4 gap-6 h-full min-h-0">
-          {/* Customer Selection */}
-          <div className="bg-white rounded-xl shadow-md p-6 flex flex-col h-full min-h-0">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Customer</h3>
-            
-            {!showAddCustomer ? (
-              <>
-                <div className="relative mb-4">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Search customers..."
-                    value={customerSearch}
-                    onChange={(e) => setCustomerSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  />
+          {/* Step Content */}
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 md:p-8 min-h-[500px]">
+            {/* Step 1: Customer Selection */}
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-blue-100 rounded-full p-3">
+                    <User className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900">Select Customer</h2>
                 </div>
-                
-                <div className="space-y-2 mb-4 flex-1 overflow-y-auto min-h-0">
-                  {filteredCustomers.length === 0 ? (
-                    <div className="text-center py-4 text-gray-500 text-sm">
-                      {customerSearch ? 'No customers found' : 'No customers available'}
+
+                {!showAddCustomer ? (
+                  <>
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        placeholder="Search customers by name or contact..."
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        className="w-full pl-12 pr-4 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      />
                     </div>
-                  ) : (
-                    filteredCustomers.map((customer) => (
-                      <button
-                        key={customer.id}
-                        onClick={() => setSelectedCustomer(customer)}
-                        className={`w-full p-3 text-left rounded-lg border transition-colors ${
-                          selectedCustomer?.id === customer.id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="font-medium text-sm">{customer.name}</div>
-                        <div className="text-xs text-gray-500">{customer.contact || 'No contact'}</div>
-                      </button>
-                    ))
-                  )}
+
+                    <div className="grid gap-3 max-h-80 overflow-y-auto">
+                      {filteredCustomers.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                          {customerSearch ? 'No customers found' : 'No customers available'}
+                        </div>
+                      ) : (
+                        filteredCustomers.map((customer) => (
+                          <button
+                            key={customer.id}
+                            onClick={() => setSelectedCustomer(customer)}
+                            className={`p-4 text-left rounded-xl border-2 transition-all duration-200 ${
+                              selectedCustomer?.id === customer.id
+                                ? 'border-blue-500 bg-blue-50 shadow-md'
+                                : 'border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50'
+                            }`}
+                          >
+                            <div className="font-semibold text-gray-900">{customer.name}</div>
+                            <div className="text-sm text-gray-600">{customer.contact || 'No contact'}</div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    <button
+  onClick={() => {
+    // Auto-fill new customer form with whatever was typed
+    if (customerSearch.trim()) {
+      setNewCustomerName(customerSearch.trim());
+      // If it's all numbers, assume it's a phone number
+      if (/^\d+$/.test(customerSearch.trim())) {
+        setNewCustomerContact(customerSearch.trim());
+        setNewCustomerName('');
+      }
+    }
+    setShowAddCustomer(true);
+  }}
+  className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200 transition-all duration-200 flex items-center justify-center gap-2 font-medium"
+>
+  <Plus className="w-5 h-5" />
+  Add New Customer
+</button>
+
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Add New Customer</h3>
+                    <div className="space-y-4">
+                      <input
+                        type="text"
+                        placeholder="Customer name"
+                        value={newCustomerName}
+                        onChange={(e) => setNewCustomerName(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Contact (optional)"
+                        value={newCustomerContact}
+                        onChange={(e) => setNewCustomerContact(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <div className="flex gap-3">
+                        <button
+                          onClick={addCustomer}
+                          className="flex-1 bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 font-medium"
+                        >
+                          Add Customer
+                        </button>
+                        <button
+                      onClick={() => {
+                                    setShowAddCustomer(false);
+                                    setNewCustomerName('');
+                                    setNewCustomerContact('');
+  }}
+  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl hover:bg-gray-300 transition-all duration-200 font-medium"
+>
+  Cancel
+</button>
+
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 2: Add Services */}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-green-100 rounded-full p-3">
+                    <ShoppingBag className="w-6 h-6 text-green-600" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900">Add Services</h2>
                 </div>
-                
-                <button
-                  onClick={() => setShowAddCustomer(true)}
-                  className="w-full bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add New Customer
-                </button>
-              </>
-            ) : (
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Customer name"
-                  value={newCustomerName}
-                  onChange={(e) => setNewCustomerName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-                <input
-                  type="text"
-                  placeholder="Contact (optional)"
-                  value={newCustomerContact}
-                  onChange={(e) => setNewCustomerContact(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={addCustomer}
-                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                  >
-                    Add
-                  </button>
-                  <button
-                    onClick={() => setShowAddCustomer(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 transition-colors text-sm"
-                  >
-                    Cancel
-                  </button>
+
+                <div className="grid lg:grid-cols-2 gap-6">
+                  {/* Available Services */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Available Services</h3>
+                    
+                    <div className="relative">
+                      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        placeholder="Search services..."
+                        value={serviceSearch}
+                        onChange={(e) => setServiceSearch(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div className="space-y-2 max-h-80 overflow-y-auto">
+                      {filteredServices.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                          {serviceSearch ? 'No services found' : 'No services available'}
+                        </div>
+                      ) : (
+                        filteredServices.map((service) => (
+                          <button
+                            key={service.id}
+                            onClick={() => addService(service)}
+                            className="w-full p-4 text-left rounded-xl border border-gray-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200"
+                          >
+                            <div className="font-medium text-gray-900">{service.name}</div>
+                            <div className="text-lg font-bold text-green-600">
+                              ₹{Number(service.price).toFixed(2)}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Selected Services */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Selected Services</h3>
+                    
+                    <div className="space-y-3 max-h-80 overflow-y-auto">
+                      {selectedServices.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-xl">
+                          No services selected
+                        </div>
+                      ) : (
+                        selectedServices.map((item) => (
+                          <div key={item.service_id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900">{item.service_name}</div>
+                                <div className="text-green-600 font-bold">
+                                  ₹{item.price.toFixed(2)} each
+                                </div>
+                              </div>
+                              
+                              <button
+                                onClick={() => removeService(item.service_id)}
+                                className="text-red-500 hover:text-red-700 p-1 hover:bg-red-100 rounded-lg transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                            
+                            <div className="flex items-center gap-4 mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-600">Qty:</span>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => updateServiceQuantity(item.service_id, item.quantity - 1)}
+                                    className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-colors"
+                                  >
+                                    <Minus className="w-4 h-4" />
+                                  </button>
+                                  <span className="w-8 text-center font-medium">{item.quantity}</span>
+                                  <button
+                                    onClick={() => updateServiceQuantity(item.service_id, item.quantity + 1)}
+                                    className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-colors"
+                                  >
+                                    <Plus className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm text-gray-600 mb-1">Assign Staff:</label>
+                              <select
+                                value={item.staff_id || ''}
+                                onChange={(e) => updateServiceStaff(item.service_id, e.target.value)}
+                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 ${
+                                  !item.staff_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                                }`}
+                              >
+                                <option value="">Select Staff</option>
+                                {staff.map((member) => (
+                                  <option key={member.id} value={member.id}>
+                                    {member.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {!item.staff_id && (
+                                <p className="text-xs text-red-600 mt-1">Staff assignment required</p>
+                              )}
+                            </div>
+                            
+                            {/* Discount Section */}
+<div className="border-t border-gray-200 pt-3 mt-3">
+  <label className="block text-sm text-gray-600 mb-2">Service Discount (Optional):</label>
+
+  {/* Toggle Buttons */}
+  <div className="flex gap-2 mb-2">
+    <button
+      type="button"
+      onClick={() => updateServiceDiscount(item.service_id, 'percentage', item.discount_percentage || 0)}
+      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+        (item.discount_type || 'percentage') === 'percentage'
+          ? 'bg-green-600 text-white'
+          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+      }`}
+    >
+      Percentage (%)
+    </button>
+    <button
+      type="button"
+      onClick={() => updateServiceDiscount(item.service_id, 'amount', item.discount_amount || 0)}
+      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+        item.discount_type === 'amount'
+          ? 'bg-green-600 text-white'
+          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+      }`}
+    >
+      Fixed Amount (₹)
+    </button>
+  </div>
+
+  {/* Input Box */}
+  <input
+    type="number"
+    min="0"
+    max={item.discount_type === 'percentage' ? 100 : item.price}
+    step={item.discount_type === 'percentage' ? 1 : 0.01}
+    value={
+      item.discount_type === 'percentage'
+        ? (item.discount_percentage || 0)
+        : (item.discount_amount || 0)
+    }
+    onChange={(e) => {
+      const value = parseFloat(e.target.value) || 0;
+      updateServiceDiscount(item.service_id, item.discount_type || 'percentage', value);
+    }}
+    className="w-28 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-green-500"
+    placeholder={item.discount_type === 'percentage' ? '0%' : '₹0'}
+  />
+
+  {/* Preview */}
+  <div className="text-xs text-gray-500 mt-1">
+    {item.discount_type === 'percentage' && item.discount_percentage
+      ? `₹${(item.price * item.discount_percentage / 100).toFixed(2)} off`
+      : item.discount_type === 'amount' && item.discount_amount
+      ? `${((item.discount_amount / item.price) * 100).toFixed(1)}% off`
+      : 'No discount'}
+  </div>
+</div>
+
+
+
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Service Selection */}
-          <div className="bg-white rounded-xl shadow-md p-6 flex flex-col h-full min-h-0">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Services</h3>
-            
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search services..."
-                value={serviceSearch}
-                onChange={(e) => setServiceSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              />
-            </div>
-            
-            <div className="space-y-2 flex-1 overflow-y-auto min-h-0">
-              {filteredServices.length === 0 ? (
-                <div className="text-center py-4 text-gray-500 text-sm">
-                  {serviceSearch ? 'No services found' : 'No services available'}
+            {/* Step 3: Sale Summary */}
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-purple-100 rounded-full p-3">
+                    <Receipt className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900">Review & Confirm</h2>
                 </div>
-              ) : (
-                filteredServices.map((service) => (
-                  <button
-                    key={service.id}
-                    onClick={() => addService(service)}
-                    className="w-full p-3 text-left rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="font-medium text-sm">{service.name}</div>
-                    <div className="text-lg font-bold text-blue-600">
-                      ₹{Number(service.price).toFixed(2)}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
 
-          {/* Selected Services Cart */}
-          <div className="bg-white rounded-xl shadow-md p-6 flex flex-col h-full min-h-0">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Selected Services</h3>
-            
-            <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
-              {selectedServices.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">
-                  No services selected
-                </div>
-              ) : (
-                selectedServices.map((item) => (
-                  <div key={item.service_id} className={`p-3 rounded-lg border transition-colors ${
-                    !item.staff_id ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'
-                  }`}>
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <div className="font-medium text-sm">{item.service_name}</div>
-                        <div className="text-blue-600 font-bold">
-                          ₹{item.price.toFixed(2)}
-                          {((item.discount_percentage || 0) > 0 || (item.discount_amount || 0) > 0) && (
-                            <span className="text-red-500 text-xs ml-1">
-                              (₹{getServiceDiscountedPrice(item).toFixed(2)} after discount)
-                            </span>
-                          )}
-                        </div>
+                <div className="grid lg:grid-cols-2 gap-6">
+                  {/* Customer Info */}
+                  <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Information</h3>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Name:</span>
+                        <span className="font-medium text-gray-900">{selectedCustomer?.name}</span>
                       </div>
-                      
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Contact:</span>
+                        <span className="font-medium text-gray-900">{selectedCustomer?.contact || 'No contact'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Order Summary */}
+                  <div className="bg-green-50 rounded-xl p-6 border border-green-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h3>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Items:</span>
+                        <span className="font-medium text-gray-900">{selectedServices.length} services</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total Quantity:</span>
+                        <span className="font-medium text-gray-900">
+                          {selectedServices.reduce((sum, item) => sum + item.quantity, 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Mode Selection */}
+                <div className="bg-indigo-50 rounded-xl p-6 border border-indigo-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Mode</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {['cash', 'card', 'upi', 'other'].map((mode) => (
                       <button
-                        onClick={() => removeService(item.service_id)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs text-gray-600">Qty:</span>
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => updateServiceQuantity(item.service_id, parseInt(e.target.value) || 1)}
-                        className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Assign Staff:</label>
-                      <select
-                        value={item.staff_id || ''}
-                        onChange={(e) => updateServiceStaff(item.service_id, e.target.value)}
-                        className={`w-full px-2 py-1 border rounded text-sm focus:ring-1 focus:ring-blue-500 ${
-                          !item.staff_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                        key={mode}
+                        type="button"
+                        onClick={() => setPaymentMode(mode)}
+                        className={`px-4 py-3 rounded-lg font-medium transition-colors capitalize ${
+                          paymentMode === mode
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-indigo-100 border border-gray-300'
                         }`}
                       >
-                        <option value="">Select Staff</option>
-                        {staff.map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {member.name}
-                          </option>
-                        ))}
-                      </select>
-                      {!item.staff_id && (
-                        <p className="text-xs text-red-600 mt-1">Staff assignment required</p>
-                      )}
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Overall Discount Section */}
+                <div className="bg-yellow-50 rounded-xl p-6 border border-yellow-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Overall Discount (Optional)</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">Discount Type:</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setOverallDiscount({ type: 'percentage', value: 0 })}
+                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            overallDiscount.type === 'percentage'
+                              ? 'bg-yellow-600 text-white'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          Percentage (%)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOverallDiscount({ type: 'amount', value: 0 })}
+                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            overallDiscount.type === 'amount'
+                              ? 'bg-yellow-600 text-white'
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          Fixed Amount (₹)
+                        </button>
+                      </div>
                     </div>
                     
-                    {/* Service-level discount */}
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <label className="block text-xs text-gray-600 mb-2">Service Discount:</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <select
-                          value={item.discount_type || 'percentage'}
-                          onChange={(e) => {
-                            const newType = e.target.value as 'percentage' | 'amount';
-                            updateServiceDiscount(item.service_id, newType, 0);
-                          }}
-                          className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
-                        >
-                          <option value="percentage">% Off</option>
-                          <option value="amount">₹ Off</option>
-                        </select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">
+                          {overallDiscount.type === 'percentage' ? 'Percentage:' : 'Amount (₹):'}
+                        </label>
                         <input
                           type="number"
                           min="0"
-                          max={item.discount_type === 'percentage' ? '100' : (item.price * item.quantity).toString()}
-                          step={item.discount_type === 'percentage' ? '1' : '0.01'}
-                          value={item.discount_type === 'percentage' ? (item.discount_percentage || 0) : (item.discount_amount || 0)}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
-                            updateServiceDiscount(item.service_id, item.discount_type || 'percentage', value);
-                          }}
-                          className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-blue-500"
+                          max={overallDiscount.type === 'percentage' ? 100 : subtotalAfterServiceDiscounts}
+                          step={overallDiscount.type === 'percentage' ? 1 : 0.01}
+                          value={overallDiscount.value}
+                          onChange={(e) => setOverallDiscount({ 
+                            ...overallDiscount, 
+                            value: parseFloat(e.target.value) || 0 
+                          })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
                           placeholder="0"
                         />
                       </div>
-                      {((item.discount_percentage || 0) > 0 || (item.discount_amount || 0) > 0) && (
-                        <div className="text-xs text-green-600 mt-1">
-                          Saving: ₹{(item.price * item.quantity - getServiceDiscountedPrice(item)).toFixed(2)}
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">Discount Amount:</label>
+                        <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 font-medium">
+                          ₹{overallDiscountAmount.toFixed(2)}
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Sale Summary & Complete */}
-          <div className="bg-white rounded-xl shadow-md p-6 flex flex-col h-full min-h-0">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Sale Summary</h3>
-            
-            <div className="space-y-4 flex-1 overflow-y-auto min-h-0">
-              <div className="flex justify-between py-2 border-b border-gray-200">
-                <span className="text-gray-600">Customer:</span>
-                <span className="font-medium">
-                  {selectedCustomer ? selectedCustomer.name : 'Not selected'}
-                </span>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between py-2 border-b border-gray-200">
-                  <span className="text-gray-600">Services:</span>
-                  <span className="font-medium">{selectedServices.length} items</span>
-                </div>
-                {selectedServices.map((item) => (
-                  <div key={item.service_id} className="flex justify-between text-sm pl-4">
-                    <span className="text-gray-600">
-                      {item.service_name} x{item.quantity}
-                      {item.staff_name && <span className="text-blue-600"> ({item.staff_name})</span>}
-                    </span>
-                    <span>₹{getServiceDiscountedPrice(item).toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Discount Section */}
-              {selectedServices.length > 0 && (
-                <div className="border-t border-gray-200 pt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Percent className="w-4 h-4 text-yellow-600" />
-                    <span className="font-medium text-gray-900">Apply Discount</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
-                      <select
-                        value={discountType}
-                        onChange={(e) => setDiscountType(e.target.value as 'percentage' | 'amount')}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-yellow-500"
-                      >
-                        <option value="percentage">Percentage (%)</option>
-                        <option value="amount">Fixed Amount (₹)</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        {discountType === 'percentage' ? 'Percentage' : 'Amount'}
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max={discountType === 'percentage' ? '100' : subtotal.toString()}
-                        step={discountType === 'percentage' ? '1' : '0.01'}
-                        value={discountType === 'percentage' ? discountPercentage : discountAmount}
-                        onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 0;
-                          if (discountType === 'percentage') {
-                            setDiscountPercentage(Math.min(100, Math.max(0, value)));
-                          } else {
-                            setDiscountAmount(Math.min(subtotal, Math.max(0, value)));
-                          }
-                        }}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-yellow-500"
-                        placeholder={discountType === 'percentage' ? '0' : '0.00'}
-                      />
-                    </div>
+                    {overallDiscountAmount > 0 && (
+                      <div className="mt-3 p-3 bg-white rounded-lg border border-yellow-300">
+                        <div className="text-sm text-gray-700">
+                          <span className="font-medium">Preview:</span> 
+                          <span className="ml-2">Subtotal: ₹{subtotal.toFixed(2)}</span>
+                          {serviceDiscountTotal > 0 && (
+                            <>
+                              <span className="mx-2">-</span>
+                              <span className="text-orange-600">Service Discounts: ₹{serviceDiscountTotal.toFixed(2)}</span>
+                            </>
+                          )}
+                          <span className="mx-2">-</span>
+                          <span className="text-red-600">Overall Discount: ₹{overallDiscountAmount.toFixed(2)}</span>
+                          <span className="mx-2">=</span>
+                          <span className="font-bold text-green-600">Final: ₹{finalTotal.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
 
-              {selectedServices.length > 0 && (
-                <>
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-600">Subtotal:</span>
-                    <span className="font-medium">₹{subtotal.toFixed(2)}</span>
+                {/* Services List */}
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Services Details</h3>
+                  <div className="space-y-3">
+                    {selectedServices.map((item) => (
+                      <div key={item.service_id} className="bg-white rounded-lg p-4 border border-gray-200">
+                        <div className="flex justify-between items-center">
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">{item.service_name}</div>
+                            <div className="text-sm text-gray-600">
+                              Staff: {item.staff_name} • Qty: {item.quantity}
+                            </div>
+                            {(item.discount_percentage || item.discount_amount) && (
+                              <div className="text-xs text-orange-600 font-medium">
+                                Service discount: {item.discount_type === 'percentage' 
+                                  ? `${item.discount_percentage}% off` 
+                                  : `₹${item.discount_amount} off`}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {(item.discount_percentage || item.discount_amount) ? (
+                              <>
+                                <div className="font-bold text-green-600">
+                                  ₹{(getServiceDiscountedPrice(item) * item.quantity).toFixed(2)}
+                                </div>
+                                <div className="text-sm text-gray-500 line-through">
+                                  ₹{(item.price * item.quantity).toFixed(2)}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  ₹{getServiceDiscountedPrice(item).toFixed(2)} × {item.quantity}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="font-bold text-green-600">
+                                  ₹{(item.price * item.quantity).toFixed(2)}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  ₹{item.price.toFixed(2)} × {item.quantity}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {finalDiscountAmount > 0 && (
-                    <div className="flex justify-between py-2 border-b border-gray-200">
-                      <span className="text-gray-600">Discount:</span>
-                      <span className="font-medium text-red-600">
-                        -₹{finalDiscountAmount.toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between py-2 text-lg font-bold text-blue-600">
-                    <span>Total:</span>
-                    <span>₹{total.toFixed(2)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-            
-            <div className="mt-4 pt-4 border-t border-gray-200">
+                </div>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="flex justify-between items-center pt-8 border-t border-gray-200 mt-8">
               <button
-                onClick={completeSale}
-                disabled={!selectedCustomer || selectedServices.length === 0 || selectedServices.some(item => !item.staff_id) || loading}
-                className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-3"
+                onClick={prevStep}
+                disabled={currentStep === 1}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  currentStep === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
               >
-                {loading ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                ) : (
-                  <>
-                    <Check className="w-5 h-5" />
-                    Complete Sale
-                  </>
-                )}
+                <ArrowLeft className="w-5 h-5" />
+                Back
               </button>
+
+              {currentStep < 3 ? (
+                <button
+                  onClick={nextStep}
+                  disabled={
+                    (currentStep === 1 && !canProceedFromStep1) ||
+                    (currentStep === 2 && !canProceedFromStep2)
+                  }
+                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                    (currentStep === 1 && !canProceedFromStep1) ||
+                    (currentStep === 2 && !canProceedFromStep2)
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg'
+                  }`}
+                >
+                  Next
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              ) : (
+                <button
+                  onClick={completeSale}
+                  disabled={loading}
+                  className="bg-green-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-green-700 transition-all duration-200 flex items-center gap-2 shadow-lg"
+                >
+                  {loading ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5" />
+                      Confirm Sale
+                    </>
+                  )}
+                </button>
+              )}
             </div>
+
+            {/* Step Requirements */}
+            {currentStep === 1 && !canProceedFromStep1 && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">Please select a customer to continue</p>
+              </div>
+            )}
+
+            {currentStep === 2 && !canProceedFromStep2 && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  {selectedServices.length === 0 
+                    ? 'Please add at least one service to continue'
+                    : 'Please assign staff to all services to continue'
+                  }
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Sale Complete Modal */}
+      {showSaleCompleteModal && completedSale && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="text-center mb-6">
+                <div className="bg-green-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                  <Check className="w-8 h-8 text-green-600" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Sale Completed!</h3>
+                <p className="text-gray-600">Transaction processed successfully</p>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Customer:</span>
+                    <span className="font-medium text-gray-900">{completedSale.customer?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Services:</span>
+                    <span className="font-medium text-gray-900">{completedSale.services.length} items</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Subtotal:</span>
+                    <span className="font-medium text-gray-900">₹{completedSale.subtotal.toFixed(2)}</span>
+                  </div>
+                  {(completedSale.serviceDiscountTotal > 0 || completedSale.overallDiscountAmount > 0) && (
+                    <div className="flex justify-between text-red-600">
+                      <span>Total Discounts:</span>
+                      <span>-₹{(completedSale.serviceDiscountTotal + completedSale.overallDiscountAmount).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-lg font-bold text-green-600 pt-2 border-t border-gray-200">
+                    <span>Final Total:</span>
+                    <span>₹{completedSale.finalTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+            
+
+              <div className="space-y-3">
+                <button
+                  onClick={printReceipt}
+                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-medium hover:bg-blue-700 transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-5 h-5" />
+                  PRINT RECEIPT
+                </button>
+                
+                <button
+                  onClick={resetPOS}
+                  className="w-full bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  NEW SALE
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

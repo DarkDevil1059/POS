@@ -3,7 +3,8 @@ import {
   ShoppingCart, 
   Users, 
   Briefcase, 
-  Settings, 
+  Settings,
+  Shield,
   BarChart3, 
   LogOut,
   Store,
@@ -33,20 +34,22 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
   };
 
   return (
-    <div className="bg-white h-screen w-64 shadow-lg flex flex-col">
+    <div className="bg-white h-screen w-full md:w-64 shadow-lg flex flex-col">
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center gap-3">
-          <div className="bg-blue-100 rounded-lg p-2">
-            <Store className="w-6 h-6 text-blue-600" />
-          </div>
+          <img 
+            src="/Salon7 logo.jpeg" 
+            alt="Salon7" 
+            className="h-10 w-auto object-contain"
+          />
           <div>
-            <h1 className="font-bold text-lg text-gray-900">POS System</h1>
-            <p className="text-xs text-gray-500">Business Management</p>
+            <h1 className="text-lg font-bold text-gray-900">Salon7</h1>
+            <p className="text-xs text-gray-500">POS System</p>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-2 md:p-4 space-y-1 md:space-y-2 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;
@@ -55,26 +58,28 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
             <button
               key={item.id}
               onClick={() => onViewChange(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+              className={`w-full flex items-center gap-2 md:gap-3 px-2 md:px-4 py-2 md:py-3 rounded-lg transition-all duration-200 text-sm md:text-base ${
                 isActive 
                   ? 'bg-blue-50 border border-blue-200 text-blue-700' 
                   : 'hover:bg-gray-50 text-gray-700 hover:text-gray-900'
               }`}
             >
-              <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : item.color}`} />
-              <span className="font-medium">{item.label}</span>
+              <Icon className={`w-4 h-4 md:w-5 md:h-5 ${isActive ? 'text-blue-600' : item.color}`} />
+              <span className="font-medium hidden sm:block">{item.label}</span>
+              <span className="font-medium sm:hidden text-xs">{item.label.split(' ')[0]}</span>
             </button>
           );
         })}
       </nav>
 
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-2 md:p-4 border-t border-gray-200">
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          className="w-full flex items-center gap-2 md:gap-3 px-2 md:px-4 py-2 md:py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm md:text-base"
         >
-          <LogOut className="w-5 h-5" />
-          <span className="font-medium">Sign Out</span>
+          <LogOut className="w-4 h-4 md:w-5 md:h-5" />
+          <span className="font-medium hidden sm:block">Sign Out</span>
+          <span className="font-medium sm:hidden">Out</span>
         </button>
       </div>
     </div>

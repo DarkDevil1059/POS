@@ -268,9 +268,9 @@ const CustomerManagement: React.FC = () => {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8">
           <div className="flex items-center gap-3">
             <div className="bg-purple-100 rounded-lg p-2">
               <Users className="w-6 h-6 text-purple-600" />
@@ -281,27 +281,29 @@ const CustomerManagement: React.FC = () => {
             </div>
           </div>
           
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
             <button
               onClick={() => setShowImportModal(true)}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+              className="bg-green-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 text-sm md:text-base"
             >
               <Upload className="w-4 h-4" />
-              Import Excel
+              <span className="hidden sm:inline">Import Excel</span>
+              <span className="sm:hidden">Import</span>
             </button>
             <button
               onClick={() => setShowAddForm(true)}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+              className="bg-purple-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 text-sm md:text-base"
             >
               <Plus className="w-4 h-4" />
-              Add Customer
+              <span className="hidden sm:inline">Add Customer</span>
+              <span className="sm:hidden">Add</span>
             </button>
           </div>
         </div>
 
         {/* Import Modal */}
         {showImportModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Import Customers from Excel</h3>
               
@@ -369,10 +371,10 @@ const CustomerManagement: React.FC = () => {
 
         {/* Add Form */}
         {showAddForm && (
-          <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Customer</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
                   type="text"
                   placeholder="Customer name"
@@ -389,10 +391,10 @@ const CustomerManagement: React.FC = () => {
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   type="submit"
-                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                  className="bg-purple-600 text-white px-4 py-3 md:py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <Save className="w-4 h-4" />
                   Save Customer
@@ -400,7 +402,7 @@ const CustomerManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={cancelEdit}
-                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors flex items-center gap-2"
+                  className="bg-gray-300 text-gray-700 px-4 py-3 md:py-2 rounded-lg hover:bg-gray-400 transition-colors flex items-center justify-center gap-2"
                 >
                   <X className="w-4 h-4" />
                   Cancel
@@ -412,27 +414,27 @@ const CustomerManagement: React.FC = () => {
 
         {/* Customers List */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-4 md:mx-0">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-gray-50 border-b border-gray-200 text-xs md:text-sm">
                 <tr>
-                  <th className="text-left p-4 font-semibold text-gray-900">Name</th>
-                  <th className="text-left p-4 font-semibold text-gray-900">Contact</th>
-                  <th className="text-left p-4 font-semibold text-gray-900">Added</th>
-                  <th className="text-right p-4 font-semibold text-gray-900">Actions</th>
+                  <th className="text-left p-2 md:p-4 font-semibold text-gray-900">Name</th>
+                  <th className="text-left p-2 md:p-4 font-semibold text-gray-900 hidden sm:table-cell">Contact</th>
+                  <th className="text-left p-2 md:p-4 font-semibold text-gray-900 hidden md:table-cell">Added</th>
+                  <th className="text-right p-2 md:p-4 font-semibold text-gray-900">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {customers.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center p-8 text-gray-500">
+                    <td colSpan={4} className="text-center p-4 md:p-8 text-gray-500">
                       No customers found
                     </td>
                   </tr>
                 ) : (
                   customers.map((customer) => (
                     <tr key={customer.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                      <td className="p-4">
+                      <td className="p-2 md:p-4">
                         {editingId === customer.id ? (
                           <input
                             type="text"
@@ -441,10 +443,16 @@ const CustomerManagement: React.FC = () => {
                             className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                           />
                         ) : (
-                          <div className="font-medium text-gray-900">{customer.name}</div>
+                          <div>
+                            <div className="font-medium text-gray-900 text-sm md:text-base">{customer.name}</div>
+                            {/* Show contact on mobile */}
+                            <div className="text-xs text-gray-500 sm:hidden">
+                              {customer.contact || 'No contact'}
+                            </div>
+                          </div>
                         )}
                       </td>
-                      <td className="p-4">
+                      <td className="p-2 md:p-4 hidden sm:table-cell">
                         {editingId === customer.id ? (
                           <input
                             type="text"
@@ -456,41 +464,41 @@ const CustomerManagement: React.FC = () => {
                           <div className="text-gray-600">{customer.contact || 'No contact'}</div>
                         )}
                       </td>
-                      <td className="p-4">
+                      <td className="p-2 md:p-4 hidden md:table-cell">
                         <div className="text-gray-600">
                           {new Date(customer.created_at).toLocaleDateString()}
                         </div>
                       </td>
-                      <td className="p-4">
+                      <td className="p-2 md:p-4">
                         <div className="flex items-center justify-end gap-2">
                           {editingId === customer.id ? (
                             <>
                               <button
                                 onClick={handleSubmit}
-                                className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
+                                className="p-1 md:p-2 text-green-600 hover:bg-green-100 rounded transition-colors"
                               >
-                                <Save className="w-4 h-4" />
+                                <Save className="w-3 h-3 md:w-4 md:h-4" />
                               </button>
                               <button
                                 onClick={cancelEdit}
-                                className="p-1 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                className="p-1 md:p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
                               >
-                                <X className="w-4 h-4" />
+                                <X className="w-3 h-3 md:w-4 md:h-4" />
                               </button>
                             </>
                           ) : (
                             <>
                               <button
                                 onClick={() => handleEdit(customer)}
-                                className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                                className="p-1 md:p-2 text-blue-600 hover:bg-blue-100 rounded transition-colors"
                               >
-                                <Edit className="w-4 h-4" />
+                                <Edit className="w-3 h-3 md:w-4 md:h-4" />
                               </button>
                               <button
                                 onClick={() => handleDelete(customer.id)}
-                                className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                                className="p-1 md:p-2 text-red-600 hover:bg-red-100 rounded transition-colors"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                               </button>
                             </>
                           )}

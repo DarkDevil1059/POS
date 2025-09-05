@@ -156,9 +156,9 @@ const SalesReports: React.FC = () => {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8">
           <div className="flex items-center gap-3">
             <div className="bg-blue-100 rounded-lg p-2">
               <TrendingUp className="w-6 h-6 text-blue-600" />
@@ -171,27 +171,28 @@ const SalesReports: React.FC = () => {
           
           <button
             onClick={exportData}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="bg-blue-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm md:text-base"
           >
             <Download className="w-4 h-4" />
-            Export Data
+            <span className="hidden sm:inline">Export Data</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
 
         {/* Date Range Selector */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          <div className="flex flex-wrap items-center gap-4">
+        <div className="bg-white rounded-xl shadow-md p-4 md:p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-gray-400" />
               <span className="font-medium text-gray-700">Date Range:</span>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {['day', 'week', 'month', 'quarter', 'custom'].map((range) => (
                 <button
                   key={range}
                   onClick={() => setDateRange(range)}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-2 md:px-3 py-1 rounded-lg text-xs md:text-sm font-medium transition-colors ${
                     dateRange === range
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -206,19 +207,19 @@ const SalesReports: React.FC = () => {
             </div>
 
             {dateRange === 'custom' && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                 <input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-2 md:px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
-                <span className="text-gray-500">to</span>
+                <span className="text-gray-500 text-sm">to</span>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="px-2 md:px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
             )}
@@ -226,12 +227,12 @@ const SalesReports: React.FC = () => {
         </div>
 
         {/* Key Metrics */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
           <div className="bg-white rounded-xl shadow-md p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-3xl font-bold text-blue-600">₹{totalRevenue.toFixed(2)}</p>
+                <p className="text-xl md:text-3xl font-bold text-blue-600">₹{totalRevenue.toFixed(2)}</p>
               </div>
               <div className="bg-blue-100 rounded-lg p-3">
                 <DollarSign className="w-6 h-6 text-blue-600" />
@@ -243,7 +244,7 @@ const SalesReports: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Sales</p>
-                <p className="text-3xl font-bold text-green-600">{totalSales}</p>
+                <p className="text-xl md:text-3xl font-bold text-green-600">{totalSales}</p>
               </div>
               <div className="bg-green-100 rounded-lg p-3">
                 <BarChart3 className="w-6 h-6 text-green-600" />
@@ -255,7 +256,7 @@ const SalesReports: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Daily Average</p>
-                <p className="text-3xl font-bold text-purple-600">₹{averageDaily.toFixed(2)}</p>
+                <p className="text-xl md:text-3xl font-bold text-purple-600">₹{averageDaily.toFixed(2)}</p>
               </div>
               <div className="bg-purple-100 rounded-lg p-3">
                 <TrendingUp className="w-6 h-6 text-purple-600" />
@@ -265,31 +266,31 @@ const SalesReports: React.FC = () => {
         </div>
 
         {/* Charts */}
-        <div className="grid lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
           {/* Revenue Trend Chart */}
-          <div className="bg-white rounded-xl shadow-md p-6">
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-6">Revenue Trend</h3>
-            <div className="h-64">
+            <div className="h-48 md:h-64">
               {salesData.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-500">
                   No data available for selected period
                 </div>
               ) : (
-                <div className="h-full flex items-end justify-between gap-2">
+                <div className="h-full flex items-end justify-between gap-1 md:gap-2">
                   {salesData.map((day, index) => (
                     <div key={day.date} className="flex-1 flex flex-col items-center">
                       <div
                         className="w-full bg-blue-500 rounded-t-sm transition-all duration-300 hover:bg-blue-600 relative group"
                         style={{
-                          height: `${(day.total_revenue / maxRevenue) * 200}px`,
+                          height: `${(day.total_revenue / maxRevenue) * (window.innerWidth < 768 ? 150 : 200)}px`,
                           minHeight: '4px'
                         }}
                       >
-                        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                        <div className="absolute -top-6 md:-top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-1 md:px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                           ₹{day.total_revenue.toFixed(2)}
                         </div>
                       </div>
-                      <div className="text-xs text-gray-500 mt-2 transform -rotate-45 origin-left">
+                      <div className="text-xs text-gray-500 mt-1 md:mt-2 transform -rotate-45 origin-left">
                         {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </div>
                     </div>
@@ -300,29 +301,29 @@ const SalesReports: React.FC = () => {
           </div>
 
           {/* Sales Count Chart */}
-          <div className="bg-white rounded-xl shadow-md p-6">
+          <div className="bg-white rounded-xl shadow-md p-4 md:p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-6">Sales Count</h3>
-            <div className="h-64">
+            <div className="h-48 md:h-64">
               {salesData.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-500">
                   No data available for selected period
                 </div>
               ) : (
-                <div className="h-full flex items-end justify-between gap-2">
+                <div className="h-full flex items-end justify-between gap-1 md:gap-2">
                   {salesData.map((day, index) => (
                     <div key={day.date} className="flex-1 flex flex-col items-center">
                       <div
                         className="w-full bg-green-500 rounded-t-sm transition-all duration-300 hover:bg-green-600 relative group"
                         style={{
-                          height: `${(day.total_sales / maxSales) * 200}px`,
+                          height: `${(day.total_sales / maxSales) * (window.innerWidth < 768 ? 150 : 200)}px`,
                           minHeight: '4px'
                         }}
                       >
-                        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute -top-6 md:-top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-1 md:px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                           {day.total_sales} sales
                         </div>
                       </div>
-                      <div className="text-xs text-gray-500 mt-2 transform -rotate-45 origin-left">
+                      <div className="text-xs text-gray-500 mt-1 md:mt-2 transform -rotate-45 origin-left">
                         {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </div>
                     </div>
@@ -335,45 +336,49 @@ const SalesReports: React.FC = () => {
 
         {/* Daily Breakdown Table */}
         <div className="mt-6 bg-white rounded-xl shadow-md overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
+          <div className="p-4 md:p-6 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900">Daily Breakdown</h3>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-4 md:mx-0">
             <table className="w-full">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 text-xs md:text-sm">
                 <tr>
-                  <th className="text-left p-4 font-semibold text-gray-900">Date</th>
-                  <th className="text-right p-4 font-semibold text-gray-900">Sales Count</th>
-                  <th className="text-right p-4 font-semibold text-gray-900">Revenue</th>
-                  <th className="text-right p-4 font-semibold text-gray-900">Avg per Sale</th>
+                  <th className="text-left p-2 md:p-4 font-semibold text-gray-900">Date</th>
+                  <th className="text-right p-2 md:p-4 font-semibold text-gray-900">Sales</th>
+                  <th className="text-right p-2 md:p-4 font-semibold text-gray-900">Revenue</th>
+                  <th className="text-right p-2 md:p-4 font-semibold text-gray-900 hidden md:table-cell">Avg/Sale</th>
                 </tr>
               </thead>
               <tbody>
                 {salesData.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center p-8 text-gray-500">
+                    <td colSpan={4} className="text-center p-4 md:p-8 text-gray-500">
                       No sales data for selected period
                     </td>
                   </tr>
                 ) : (
                   salesData.map((day) => (
                     <tr key={day.date} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                      <td className="p-4">
-                        <div className="font-medium text-gray-900">
+                      <td className="p-2 md:p-4">
+                        <div className="font-medium text-gray-900 text-xs md:text-sm">
                           {new Date(day.date).toLocaleDateString('en-US', { 
-                            weekday: 'short',
+                            weekday: window.innerWidth < 768 ? undefined : 'short',
                             month: 'short', 
                             day: 'numeric' 
                           })}
                         </div>
                       </td>
-                      <td className="p-4 text-right">
-                        <div className="font-medium text-gray-900">{day.total_sales}</div>
+                      <td className="p-2 md:p-4 text-right">
+                        <div className="font-medium text-gray-900 text-sm md:text-base">{day.total_sales}</div>
                       </td>
-                      <td className="p-4 text-right">
-                        <div className="font-bold text-green-600">₹{day.total_revenue.toFixed(2)}</div>
+                      <td className="p-2 md:p-4 text-right">
+                        <div className="font-bold text-green-600 text-sm md:text-base">₹{day.total_revenue.toFixed(2)}</div>
+                        {/* Show avg on mobile */}
+                        <div className="text-xs text-gray-500 md:hidden">
+                          Avg: ₹{day.total_sales > 0 ? (day.total_revenue / day.total_sales).toFixed(2) : '0.00'}
+                        </div>
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-2 md:p-4 text-right hidden md:table-cell">
                         <div className="text-gray-600">
                           ₹{day.total_sales > 0 ? (day.total_revenue / day.total_sales).toFixed(2) : '0.00'}
                         </div>

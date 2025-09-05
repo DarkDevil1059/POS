@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Store, Menu } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginForm from './components/Auth/LoginForm';
 import Sidebar from './components/Layout/Sidebar';
@@ -8,6 +9,7 @@ import CustomerManagement from './components/Management/CustomerManagement';
 import ServiceManagement from './components/Management/ServiceManagement';
 import StaffManagement from './components/Management/StaffManagement';
 import ReportsAnalytics from './components/Reports/ReportsAnalytics';
+import AdminSettings from './components/Settings/AdminSettings';
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -45,9 +47,40 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar activeView={activeView} onViewChange={setActiveView} />
-      <div className="flex-1 overflow-hidden">
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+      {/* Mobile Header */}
+      <div className="md:hidden bg-white border-b border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <img 
+              src="/Salon7 logo.jpeg" 
+              alt="Salon7" 
+              className="h-8 w-auto object-contain"
+            />
+            <span className="text-lg font-bold text-gray-900">POS SYSTEM</span>
+          </div>
+          <button
+            onClick={() => setActiveView('menu')}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Sidebar - Hidden on mobile unless menu is active */}
+      <div className={`${activeView === 'menu' ? 'block' : 'hidden'} md:block`}>
+        <Sidebar activeView={activeView} onViewChange={(view) => {
+          setActiveView(view);
+          // Auto-close menu on mobile after selection
+          if (view !== 'menu') {
+            // Small delay to allow for smooth transition
+            setTimeout(() => setActiveView(view), 100);
+          }
+        }} />
+      </div>
+      
+      <div className={`flex-1 ${activeView === 'menu' ? 'hidden md:block' : 'block'}`}>
         {renderActiveView()}
       </div>
     </div>

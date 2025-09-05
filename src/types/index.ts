@@ -39,6 +39,8 @@ export interface Sale {
   date: string;
   total: number;
   discount_amount?: number;
+  overall_discount_amount?: number;
+  overall_discount_type?: 'percentage' | 'amount';
   created_at: string;
   customers?: Customer;
   staff?: Staff;
