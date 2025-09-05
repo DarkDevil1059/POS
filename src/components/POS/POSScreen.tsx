@@ -198,7 +198,8 @@ const POSScreen: React.FC = () => {
         serviceDiscountTotal,
         overallDiscountAmount,
         finalTotal,
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        paymentMode: paymentMode
       };
 
       // Create individual sale records for each service
@@ -793,7 +794,7 @@ const receiptContent = `
                   {/* Order Summary */}
                   <div className="bg-green-50 rounded-xl p-6 border border-green-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h3>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Items:</span>
                         <span className="font-medium text-gray-900">{selectedServices.length} services</span>
@@ -803,6 +804,28 @@ const receiptContent = `
                         <span className="font-medium text-gray-900">
                           {selectedServices.reduce((sum, item) => sum + item.quantity, 0)}
                         </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Subtotal:</span>
+                        <span className="font-medium text-gray-900">₹{subtotal.toFixed(2)}</span>
+                      </div>
+                      {serviceDiscountTotal > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-red-600">Service Discounts:</span>
+                          <span className="font-medium text-red-600">-₹{serviceDiscountTotal.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {overallDiscountAmount > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-red-600">Overall Discount:</span>
+                          <span className="font-medium text-red-600">-₹{overallDiscountAmount.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-green-200 pt-3 mt-3">
+                        <div className="flex justify-between">
+                          <span className="text-lg font-bold text-green-800">Total:</span>
+                          <span className="text-lg font-bold text-green-600">₹{finalTotal.toFixed(2)}</span>
+                        </div>
                       </div>
                     </div>
                   </div>

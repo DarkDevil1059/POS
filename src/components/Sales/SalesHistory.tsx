@@ -435,7 +435,7 @@ const receiptContent = `
         ${sale.customers?.contact || ""}
       </div>
       <div class="section">
-        <strong>Payment Mode:</strong> ${sale.payment_mode || "Cash"}
+        <strong>Payment Mode:</strong> ${(sale.payment_mode || "cash").charAt(0).toUpperCase() + (sale.payment_mode || "cash").slice(1)}
       </div>
       <div class="section">
         <strong>Date:</strong> ${sale.date ? new Date(sale.date).toLocaleDateString() : ""}<br/>
