@@ -1,0 +1,221 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply antialiased;
+  }
+}
+
+@layer utilities {
+  .glass-effect {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+  }
+
+  .glass-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .glass-hover:hover {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    background: rgba(255, 255, 255, 0.95);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.12);
+  }
+
+  .smooth-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-shadow {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.02);
+  }
+
+  .card-shadow-hover:hover {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  }
+}
+
+/* Light Theme (Default) */
+.theme-light {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  min-height: 100vh;
+  color: #111827;
+}
+
+.theme-light .theme-header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(226, 232, 240, 0.8);
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark Theme */
+.theme-dark {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  min-height: 100vh;
+  color: #f9fafb;
+}
+
+.theme-dark .bg-white {
+  background: linear-gradient(145deg, #1e293b 0%, #334155 100%) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+.theme-dark .bg-gray-50 {
+  background: rgba(30, 41, 59, 0.6) !important;
+}
+
+.theme-dark .bg-gray-100 {
+  background: rgba(51, 65, 85, 0.8) !important;
+}
+
+.theme-dark .text-gray-900 {
+  color: #f9fafb !important;
+}
+
+.theme-dark .text-gray-800 {
+  color: #f3f4f6 !important;
+}
+
+.theme-dark .text-gray-700 {
+  color: #e5e7eb !important;
+}
+
+.theme-dark .text-gray-600 {
+  color: #d1d5db !important;
+}
+
+.theme-dark .border-gray-200 {
+  border-color: rgba(71, 85, 105, 0.5) !important;
+}
+
+.theme-dark .border-gray-300 {
+  border-color: rgba(100, 116, 139, 0.6) !important;
+}
+
+.theme-dark .hover\:bg-gray-50:hover {
+  background: rgba(51, 65, 85, 0.6) !important;
+}
+
+.theme-dark .hover\:bg-gray-100:hover {
+  background: rgba(71, 85, 105, 0.7) !important;
+}
+
+.theme-dark input,
+.theme-dark textarea,
+.theme-dark select {
+  background: rgba(30, 41, 59, 0.8) !important;
+  color: #f9fafb !important;
+  border-color: rgba(71, 85, 105, 0.6) !important;
+}
+
+.theme-dark .theme-header {
+  background: rgba(30, 41, 59, 0.95) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(71, 85, 105, 0.5) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.theme-dark .card-shadow {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Glass Theme */
+.theme-glass {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  min-height: 100vh;
+  color: #111827;
+  animation: gradient-shift 15s ease infinite;
+  background-size: 200% 200%;
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.theme-glass .bg-white {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15) !important;
+}
+
+.theme-glass .bg-gray-50 {
+  background: rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.theme-glass .bg-gray-100 {
+  background: rgba(255, 255, 255, 0.3) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.theme-glass .text-gray-900 {
+  color: #ffffff !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.theme-glass .text-gray-800 {
+  color: #f9fafb !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.theme-glass .text-gray-700 {
+  color: #f3f4f6 !important;
+}
+
+.theme-glass .text-gray-600 {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.theme-glass .border-gray-200 {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.theme-glass .border-gray-300 {
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.theme-glass .hover\:bg-gray-50:hover {
+  background: rgba(255, 255, 255, 0.35) !important;
+}
+
+.theme-glass .hover\:bg-gray-100:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+.theme-glass input,
+.theme-glass textarea,
+.theme-glass select {
+  background: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+}
+
+.theme-glass input::placeholder,
+.theme-glass textarea::placeholder {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.theme-glass .theme-header {
+  background: rgba(255, 255, 255, 0.3) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.2);
+}
