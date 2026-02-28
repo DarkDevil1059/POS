@@ -158,25 +158,40 @@ const SalesHistory: React.FC = () => {
       const serviceIds = [...new Set(groupedSalesArray.flatMap((s: any) => s.service_ids).filter(Boolean))];
       const staffIds = [...new Set(groupedSalesArray.flatMap((s: any) => s.staff_ids).filter(Boolean))];
 
+      // Helper to fetch records in chunks to avoid URL length limits
+      const fetchInChunks = async (table: string, columns: string, ids: string[]) => {
+        if (!ids.length) return [];
+        const chunkSize = 150; // chunk size for UUIDs
+        const chunks = [];
+        for (let i = 0; i < ids.length; i += chunkSize) {
+          chunks.push(ids.slice(i, i + chunkSize));
+        }
+
+        const results = await Promise.all(
+          chunks.map(chunk =>
+            supabaseClient.from(table).select(columns).in('id', chunk)
+          )
+        );
+
+        let allData: any[] = [];
+        results.forEach(({ data, error }) => {
+          if (error) console.error(`Error fetching chunks for ${table}:`, error);
+          if (data) allData = [...allData, ...data];
+        });
+
+        return allData;
+      };
+
       // Fetch related data
-      const [customersRes, servicesRes, staffRes] = await Promise.all([
-        customerIds.length > 0 ? supabaseClient
-          .from('customers')
-          .select('id, name, contact')
-          .in('id', customerIds) : { data: [] },
-        serviceIds.length > 0 ? supabaseClient
-          .from('services')
-          .select('id, name, price')
-          .in('id', serviceIds) : { data: [] },
-        staffIds.length > 0 ? supabaseClient
-          .from('staff')
-          .select('id, name')
-          .in('id', staffIds) : { data: [] }
+      const [customersData, servicesData, staffData] = await Promise.all([
+        fetchInChunks('customers', 'id, name, contact', customerIds),
+        fetchInChunks('services', 'id, name, price', serviceIds),
+        fetchInChunks('staff', 'id, name', staffIds)
       ]);
 
-      const customersMapLocal = new Map((customersRes.data || []).map(c => [c.id, c]));
-      const servicesMapLocal = new Map((servicesRes.data || []).map(s => [s.id, s]));
-      const staffMapLocal = new Map((staffRes.data || []).map(s => [s.id, s]));
+      const customersMapLocal = new Map(customersData.map(c => [c.id, c]));
+      const servicesMapLocal = new Map(servicesData.map(s => [s.id, s]));
+      const staffMapLocal = new Map(staffData.map(s => [s.id, s]));
 
       // Store maps in state for use in other functions
       setServicesMap(servicesMapLocal);
