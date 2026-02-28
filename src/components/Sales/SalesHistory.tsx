@@ -9,9 +9,6 @@ import {
   RefreshCw,
   Users,
   DollarSign,
-  Eye,
-  ChevronDown,
-  ChevronUp,
   ArrowUpDown,
   FileText,
   Clock,
@@ -60,7 +57,7 @@ const SalesHistory: React.FC = () => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
-  
+
   const [filters, setFilters] = useState<FilterState>({
     dateRange: 'today',
     startDate: new Date().toISOString().split('T')[0],
@@ -81,8 +78,6 @@ const SalesHistory: React.FC = () => {
 
   // Store maps for printing receipts
   const [servicesMap, setServicesMap] = useState<Map<string, any>>(new Map());
-  const [staffMap, setStaffMap] = useState<Map<string, any>>(new Map());
-  const [customersMap, setCustomersMap] = useState<Map<string, any>>(new Map());
 
   useEffect(() => {
     fetchSales();
@@ -99,21 +94,36 @@ const SalesHistory: React.FC = () => {
       const { data: { user } } = await supabaseClient.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // First get all sales for the user
-      const { data: salesData, error } = await supabaseClient
-        .from('sales')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false });
+      let allSalesData: any[] = [];
+      let fetchMore = true;
+      let from = 0;
+      const step = 1000;
 
-      if (error) throw error;
+      while (fetchMore) {
+        const { data: salesChunk, error } = await supabaseClient
+          .from('sales')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('date', { ascending: false })
+          .range(from, from + step - 1);
+
+        if (error) throw error;
+
+        allSalesData = [...allSalesData, ...(salesChunk || [])];
+
+        if (!salesChunk || salesChunk.length < step) {
+          fetchMore = false;
+        } else {
+          from += step;
+        }
+      }
 
       // Group sales by date and customer to combine multiple services/staff
-      const groupedSales = (salesData || []).reduce((acc, sale) => {
+      const groupedSales = allSalesData.reduce((acc, sale) => {
         const dateKey = new Date(sale.date).toISOString().split('T')[0];
         const customerKey = sale.customer_id || 'no-customer';
         const groupKey = `${dateKey}-${customerKey}`;
-        
+
         if (!acc[groupKey]) {
           acc[groupKey] = {
             id: sale.id,
@@ -129,24 +139,24 @@ const SalesHistory: React.FC = () => {
             individual_sales: []
           };
         }
-        
+
         acc[groupKey].total += Number(sale.total);
         acc[groupKey].discount_amount += Number(sale.discount_amount || 0);
         acc[groupKey].service_ids.push(sale.service_id);
         acc[groupKey].staff_ids.push(sale.staff_id);
         acc[groupKey].individual_sales.push(sale);
-        
+
         return acc;
       }, {} as Record<string, any>);
 
       // Convert grouped sales back to array and fetch related data
       const groupedSalesArray = Object.values(groupedSales);
-      
+
       // Get all unique customer, service, and staff IDs
-      const customerIds = [...new Set(groupedSalesArray.map(s => s.customer_id).filter(Boolean))];
-      const serviceIds = [...new Set(groupedSalesArray.flatMap(s => s.service_ids).filter(Boolean))];
-      const staffIds = [...new Set(groupedSalesArray.flatMap(s => s.staff_ids).filter(Boolean))];
-      
+      const customerIds = [...new Set(groupedSalesArray.map((s: any) => s.customer_id).filter(Boolean))];
+      const serviceIds = [...new Set(groupedSalesArray.flatMap((s: any) => s.service_ids).filter(Boolean))];
+      const staffIds = [...new Set(groupedSalesArray.flatMap((s: any) => s.staff_ids).filter(Boolean))];
+
       // Fetch related data
       const [customersRes, servicesRes, staffRes] = await Promise.all([
         customerIds.length > 0 ? supabaseClient
@@ -162,34 +172,32 @@ const SalesHistory: React.FC = () => {
           .select('id, name')
           .in('id', staffIds) : { data: [] }
       ]);
-      
-      const customersMap = new Map((customersRes.data || []).map(c => [c.id, c]));
-      const servicesMap = new Map((servicesRes.data || []).map(s => [s.id, s]));
-      const staffMap = new Map((staffRes.data || []).map(s => [s.id, s]));
-      
+
+      const customersMapLocal = new Map((customersRes.data || []).map(c => [c.id, c]));
+      const servicesMapLocal = new Map((servicesRes.data || []).map(s => [s.id, s]));
+      const staffMapLocal = new Map((staffRes.data || []).map(s => [s.id, s]));
+
       // Store maps in state for use in other functions
-      setCustomersMap(customersMap);
-      setServicesMap(servicesMap);
-      setStaffMap(staffMap);
-      
+      setServicesMap(servicesMapLocal);
+
       // Build final sales with details
-      const salesWithDetails = groupedSalesArray.map(sale => {
-        const customer = customersMap.get(sale.customer_id);
-        
+      const salesWithDetails = groupedSalesArray.map((sale: any) => {
+        const customer = customersMapLocal.get(sale.customer_id);
+
         // Get unique services and staff for this grouped sale
-        const uniqueServiceIds = [...new Set(sale.service_ids.filter(Boolean))];
-        const uniqueStaffIds = [...new Set(sale.staff_ids.filter(Boolean))];
-        
+        const uniqueServiceIds = [...new Set(sale.service_ids.filter(Boolean))] as string[];
+        const uniqueStaffIds = [...new Set(sale.staff_ids.filter(Boolean))] as string[];
+
         const serviceNames = uniqueServiceIds
-          .map(id => servicesMap.get(id)?.name)
+          .map(id => servicesMapLocal.get(id)?.name)
           .filter(Boolean)
           .join(', ');
-          
+
         const staffNames = uniqueStaffIds
-          .map(id => staffMap.get(id)?.name)
+          .map(id => staffMapLocal.get(id)?.name)
           .filter(Boolean)
           .join(', ');
-        
+
         return {
           ...sale,
           customer_name: customer?.name || 'Walk-in Customer',
@@ -224,10 +232,10 @@ const SalesHistory: React.FC = () => {
   // Apply filters and search
   const filteredSales = useMemo(() => {
     let filtered = sales.filter(sale => {
-// Date range filter
+      // Date range filter
       const saleDate = new Date(sale.date);
       const now = new Date();
-      
+
       if (filters.dateRange === 'custom') {
         if (filters.startDate && saleDate < new Date(filters.startDate)) return false;
         if (filters.endDate && saleDate > new Date(filters.endDate + 'T23:59:59')) return false;
@@ -318,10 +326,11 @@ const SalesHistory: React.FC = () => {
     const totalSales = filteredSales.length;
     const totalRevenue = filteredSales.reduce((sum, sale) => sum + Number(sale.total), 0);
     const totalDiscount = filteredSales.reduce((sum, sale) => sum + Number(sale.discount_amount || 0), 0);
-return {
+    return {
       totalSales,
       totalRevenue,
-      totalDiscount};
+      totalDiscount
+    };
   }, [filteredSales]);
 
   const handleSort = (key: keyof SaleWithDetails | 'customer_name' | 'staff_name' | 'service_name') => {
@@ -365,7 +374,7 @@ return {
       ])
     ];
 
-    const csvContent = csvData.map(row => 
+    const csvContent = csvData.map(row =>
       row.map(field => `"${field}"`).join(',')
     ).join('\n');
 
@@ -383,10 +392,12 @@ return {
       const totalDiscount = Number(sale.discount_amount) || 0;
       const subTotal = Number(sale.total) + totalDiscount;
       const finalTotal = Number(sale.total);
-      
+
       // Group individual sales by service to avoid duplicates
       const serviceGroups = (sale.individual_sales || []).reduce((acc, item) => {
         const serviceId = item.service_id;
+        if (!serviceId) return acc; // Fix: Handle cases where service_id might be null
+
         if (!acc[serviceId]) {
           acc[serviceId] = {
             service: servicesMap.get(serviceId),
@@ -415,7 +426,7 @@ return {
         `;
       }).join("");
 
-const receiptContent = `
+      const receiptContent = `
   <!DOCTYPE html>
   <html lang="en">
   <head>
@@ -489,7 +500,7 @@ const receiptContent = `
 `;
 
       const printWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=yes,resizable=yes');
-      
+
       if (!printWindow) {
         alert('Unable to open print window. Please check your browser settings.');
         return;
@@ -498,7 +509,7 @@ const receiptContent = `
       printWindow.document.write(receiptContent);
       printWindow.document.close();
       printWindow.focus();
-      
+
     } catch (error) {
       console.error('Error printing receipt:', error);
       alert('An unexpected error occurred while preparing the receipt.');
@@ -534,7 +545,7 @@ const receiptContent = `
       setSaleToDelete(null);
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting sale:', error);
       alert(`Error deleting sale: ${error.message || 'Unknown error'}`);
       return false;
@@ -593,11 +604,11 @@ const receiptContent = `
                 <h1 className="text-3xl font-bold text-gray-900">Sales History</h1>
                 <p className="text-gray-600 mt-1">
                   {filteredSales.length} of {sales.length} sales
-                  
+
                 </p>
               </div>
             </div>
-            
+
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => fetchSales(true)}
@@ -607,42 +618,39 @@ const receiptContent = `
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">Refresh</span>
               </button>
-              
+
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border shadow-sm ${
-                  showFilters 
-                    ? 'bg-blue-600 text-white border-blue-600' 
-                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                }`}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border shadow-sm ${showFilters
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  }`}
               >
                 <Filter className="w-4 h-4" />
                 <span className="hidden sm:inline">Filters</span>
               </button>
-              
+
               <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 shadow-sm">
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`px-3 py-2 rounded-l-lg transition-colors ${
-                    viewMode === 'table' 
-                      ? 'bg-blue-600 text-white' 
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
+                  className={`px-3 py-2 rounded-l-lg transition-colors ${viewMode === 'table'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-50'
+                    }`}
                 >
                   <FileText className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setViewMode('cards')}
-                  className={`px-3 py-2 rounded-r-lg transition-colors ${
-                    viewMode === 'cards' 
-                      ? 'bg-blue-600 text-white' 
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
+                  className={`px-3 py-2 rounded-r-lg transition-colors ${viewMode === 'cards'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-50'
+                    }`}
                 >
                   <Package className="w-4 h-4" />
                 </button>
               </div>
-              
+
               <button
                 onClick={exportToCSV}
                 className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm"
@@ -678,7 +686,7 @@ const receiptContent = `
                 </div>
               </div>
             </div>
-<div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Discounts</p>
@@ -694,7 +702,7 @@ const receiptContent = `
           {/* Search and Filters */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
             <div className="flex flex-col lg:flex-row gap-4">
-<div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <select
                   value={filters.dateRange}
                   onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value as any }))}
@@ -707,7 +715,7 @@ const receiptContent = `
                   <option value="year">This Year</option>
                   <option value="custom">Custom Range</option>
                 </select>
-                
+
                 {filters.dateRange === 'custom' && (
                   <>
                     <input
@@ -1106,11 +1114,11 @@ const receiptContent = `
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mt-4 px-4 bg-white rounded-xl shadow-sm border border-gray-100 py-4">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Previous
               </button>
@@ -1118,14 +1126,11 @@ const receiptContent = `
                 <span className="text-sm text-gray-600">
                   Page {currentPage} of {totalPages}
                 </span>
-                <span className="text-xs text-gray-500">
-                  ({(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredSales.length)} of {filteredSales.length})
-                </span>
               </div>
               <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Next
               </button>

@@ -11,6 +11,15 @@ interface EditSaleModalProps {
   onSuccess: () => void;
 }
 
+interface SaleItem {
+  id?: string;
+  service_id: string | null;
+  staff_id: string;
+  price: number;
+  discount: number;
+  total: number;
+}
+
 const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, onSuccess }) => {
   const { supabaseClient } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -21,20 +30,44 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
   const [services, setServices] = useState<Service[]>([]);
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
-  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
-  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
-  const [serviceDiscount, setServiceDiscount] = useState<string>('0');
+  const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [overallDiscount, setOverallDiscount] = useState<string>('0');
   const [paymentMode, setPaymentMode] = useState<string>('cash');
+  const [serviceSearchToggles, setServiceSearchToggles] = useState<{ [key: number]: boolean }>({});
+  const [serviceSearchQueries, setServiceSearchQueries] = useState<{ [key: number]: string }>({});
 
   useEffect(() => {
     if (isOpen && sale) {
       fetchData();
       setSelectedCustomerId(sale.customer_id || '');
-      setSelectedStaffId(sale.staff_id || '');
-      setSelectedServiceId(sale.service_id || '');
-      setServiceDiscount(sale.discount_amount?.toString() || '0');
-      setOverallDiscount('0');
+
+      // Map existing single sale to an item list
+      if (sale.individual_sales && sale.individual_sales.length > 0) {
+        const items = sale.individual_sales.map(s => {
+          // Find the service to get the original price. We don't have it directly in the sale record unless we fetch it
+          return {
+            id: s.id,
+            service_id: s.service_id,
+            staff_id: s.staff_id || '',
+            price: Number(s.total) + Number(s.discount_amount || 0), // Estimate price from total + discount
+            discount: Number(s.discount_amount || 0),
+            total: Number(s.total)
+          };
+        });
+        setSaleItems(items);
+      } else {
+        // Fallback for older singular records
+        setSaleItems([{
+          id: sale.id,
+          service_id: sale.service_id || '',
+          staff_id: sale.staff_id || '',
+          price: Number(sale.total) + Number(sale.discount_amount || 0),
+          discount: Number(sale.discount_amount || 0),
+          total: Number(sale.total)
+        }]);
+      }
+
+      setOverallDiscount('0'); // In POS system, overall discount is usually pre-distributed to items or applied differently. Let's keep it 0 as edit.
       setPaymentMode(sale.payment_mode || 'cash');
       setAdminPassword('');
     }
@@ -54,6 +87,19 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
       if (customersRes.data) setCustomers(customersRes.data);
       if (staffRes.data) setStaff(staffRes.data);
       if (servicesRes.data) setServices(servicesRes.data);
+
+      // Update item prices based on actual fetched services if we want accurate initial prices
+      if (servicesRes.data && saleItems.length > 0) {
+        setSaleItems(prev => prev.map(item => {
+          const s = servicesRes.data.find((service: any) => service.id === item.service_id);
+          const price = s ? Number(s.price) : item.price;
+          return {
+            ...item,
+            price: price,
+            total: Math.max(0, price - item.discount)
+          };
+        }));
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -91,36 +137,85 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
         return;
       }
 
-      const selectedService = services.find(s => s.id === selectedServiceId);
-      if (!selectedService) {
-        alert('Please select a service');
+      if (saleItems.length === 0) {
+        alert('Please add at least one service');
         return;
       }
 
-      const servicePrice = Number(selectedService.price);
-      const serviceDiscountAmount = Number(serviceDiscount) || 0;
-      const subtotal = servicePrice - serviceDiscountAmount;
+      for (const item of saleItems) {
+        if (!item.service_id) {
+          alert('Please select a service for all items');
+          return;
+        }
+      }
+
+      const totalServiceDiscount = saleItems.reduce((sum, item) => sum + item.discount, 0);
+      const subtotal = saleItems.reduce((sum, item) => sum + item.price, 0) - totalServiceDiscount;
       const overallDiscountAmount = Number(overallDiscount) || 0;
-      const finalTotal = Math.max(0, subtotal - overallDiscountAmount);
 
-      const saleIds = sale.individual_sales?.map(s => s.id) || [sale.id];
+      // Distribute overall discount proportionally if there are multiple items
+      let remainingOverallDiscount = overallDiscountAmount;
+      const itemsWithFinalDiscounts = saleItems.map((item, index) => {
+        let itemOverallDiscountShare = 0;
+        if (subtotal > 0 && overallDiscountAmount > 0) {
+          if (index === saleItems.length - 1) {
+            itemOverallDiscountShare = remainingOverallDiscount;
+          } else {
+            itemOverallDiscountShare = Number(((item.total / subtotal) * overallDiscountAmount).toFixed(2));
+            remainingOverallDiscount -= itemOverallDiscountShare;
+          }
+        }
 
-      const updateData: any = {
-        customer_id: selectedCustomerId || null,
-        staff_id: selectedStaffId || null,
-        service_id: selectedServiceId,
-        discount_amount: serviceDiscountAmount + overallDiscountAmount,
-        payment_mode: paymentMode,
-        total: finalTotal
-      };
+        return {
+          ...item,
+          finalDiscount: item.discount + itemOverallDiscountShare,
+          finalTotal: Math.max(0, item.price - (item.discount + itemOverallDiscountShare))
+        };
+      });
 
-      const { error } = await supabaseClient
-        .from('sales')
-        .update(updateData)
-        .in('id', saleIds)
-        .eq('user_id', user.id);
+      // Get original ids to handle deletes
+      const originalSaleIds = sale.individual_sales?.map(s => s.id) || [sale.id];
+      const newItemIds = itemsWithFinalDiscounts.filter(i => i.id).map(i => i.id);
 
-      if (error) throw error;
+      const idsToDelete = originalSaleIds.filter(id => !newItemIds.includes(id));
+
+      // Update existing, insert new, delete old
+      if (idsToDelete.length > 0) {
+        const { error: deleteError } = await supabaseClient
+          .from('sales')
+          .delete()
+          .in('id', idsToDelete)
+          .eq('user_id', user.id);
+
+        if (deleteError) throw deleteError;
+      }
+
+      for (const item of itemsWithFinalDiscounts) {
+        const saleData = {
+          user_id: user.id,
+          customer_id: selectedCustomerId || null,
+          staff_id: item.staff_id || null,
+          service_id: item.service_id,
+          payment_mode: paymentMode,
+          discount_amount: item.finalDiscount,
+          total: item.finalTotal,
+          date: sale.date // Keep original date
+        };
+
+        if (item.id) {
+          const { error } = await supabaseClient
+            .from('sales')
+            .update(saleData)
+            .eq('id', item.id)
+            .eq('user_id', user.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabaseClient
+            .from('sales')
+            .insert([saleData]);
+          if (error) throw error;
+        }
+      }
 
       alert('Sale updated successfully');
       onSuccess();
@@ -134,13 +229,6 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
   };
 
   if (!isOpen || !sale) return null;
-
-  const selectedService = services.find(s => s.id === selectedServiceId);
-  const servicePrice = selectedService ? Number(selectedService.price) : 0;
-  const serviceDiscountAmount = Number(serviceDiscount) || 0;
-  const subtotal = Math.max(0, servicePrice - serviceDiscountAmount);
-  const overallDiscountAmount = Number(overallDiscount) || 0;
-  const finalTotal = Math.max(0, subtotal - overallDiscountAmount);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -175,73 +263,152 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Service *
-              </label>
-              <select
-                value={selectedServiceId}
-                onChange={(e) => setSelectedServiceId(e.target.value)}
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">-- Select Service --</option>
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name} - ₹{Number(service.price).toFixed(2)}
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700">Services</label>
+                <button
+                  type="button"
+                  onClick={() => setSaleItems([...saleItems, { service_id: '', staff_id: '', price: 0, discount: 0, total: 0 }])}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  + Add Service
+                </button>
+              </div>
+
+              {saleItems.map((item, index) => (
+                <div key={index} className="bg-gray-50 p-4 rounded-lg flex flex-col gap-4 border border-gray-200">
+                  <div className="flex gap-4 items-start">
+                    <div className="flex-1 relative">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Search service..."
+                          value={serviceSearchToggles[index] ? (serviceSearchQueries[index] || '') : (services.find(s => s.id === item.service_id)?.name || '')}
+                          onFocus={() => {
+                            setServiceSearchToggles(prev => ({ ...prev, [index]: true }));
+                            setServiceSearchQueries(prev => ({ ...prev, [index]: '' }));
+                          }}
+                          onChange={(e) => {
+                            setServiceSearchQueries(prev => ({ ...prev, [index]: e.target.value }));
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          required={!item.service_id}
+                        />
+                        {serviceSearchToggles[index] && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                            {services
+                              .filter(service =>
+                                service.name.toLowerCase().includes((serviceSearchQueries[index] || '').toLowerCase())
+                              )
+                              .map((service) => (
+                                <div
+                                  key={service.id}
+                                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                  onClick={() => {
+                                    const newPrice = Number(service.price) || 0;
+                                    const newItems = [...saleItems];
+                                    newItems[index] = {
+                                      ...item,
+                                      service_id: service.id,
+                                      price: newPrice,
+                                      total: Math.max(0, newPrice - item.discount)
+                                    };
+                                    setSaleItems(newItems);
+                                    setServiceSearchToggles(prev => ({ ...prev, [index]: false }));
+                                  }}
+                                >
+                                  <div className="font-medium text-gray-900">{service.name}</div>
+                                  <div className="text-gray-500">₹{Number(service.price).toFixed(2)}</div>
+                                </div>
+                              ))}
+                            {services.filter(service => service.name.toLowerCase().includes((serviceSearchQueries[index] || '').toLowerCase())).length === 0 && (
+                              <div className="px-4 py-2 text-gray-500 text-sm">No services found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {serviceSearchToggles[index] && (
+                        <div
+                          className="fixed inset-0 z-0"
+                          onClick={() => setServiceSearchToggles(prev => ({ ...prev, [index]: false }))}
+                        />
+                      )}
+                    </div>
+
+                    <div className="flex-1">
+                      <select
+                        value={item.staff_id}
+                        onChange={(e) => {
+                          const newItems = [...saleItems];
+                          newItems[index] = { ...item, staff_id: e.target.value };
+                          setSaleItems(newItems);
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      >
+                        <option value="">-- Select Staff --</option>
+                        {staff.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newItems = [...saleItems];
+                        newItems.splice(index, 1);
+                        setSaleItems(newItems);
+                      }}
+                      className="text-gray-400 hover:text-red-500 p-2 rounded-lg"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500 mb-1 block">Discount (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.discount || ''}
+                        onChange={(e) => {
+                          const discount = Number(e.target.value) || 0;
+                          const newItems = [...saleItems];
+                          newItems[index] = {
+                            ...item,
+                            discount,
+                            total: Math.max(0, item.price - discount)
+                          };
+                          setSaleItems(newItems);
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="w-1/3 text-right">
+                      <div className="text-xs text-gray-500 mb-1">Item Total</div>
+                      <div className="font-semibold text-gray-900">₹{item.total.toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Staff
+                Overall Discount (₹)
               </label>
-              <select
-                value={selectedStaffId}
-                onChange={(e) => setSelectedStaffId(e.target.value)}
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={overallDiscount}
+                onChange={(e) => setOverallDiscount(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">-- Select Staff --</option>
-                {staff.map((staffMember) => (
-                  <option key={staffMember.id} value={staffMember.id}>
-                    {staffMember.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Service Discount (₹)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={serviceDiscount}
-                  onChange={(e) => setServiceDiscount(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Overall Discount (₹)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={overallDiscount}
-                  onChange={(e) => setOverallDiscount(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0.00"
-                />
-              </div>
+                placeholder="0.00"
+              />
             </div>
 
             <div>
@@ -262,28 +429,34 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
 
             <div className="bg-gray-50 rounded-lg p-4 space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Service Price:</span>
-                <span className="font-medium text-gray-900">₹{servicePrice.toFixed(2)}</span>
+                <span className="text-gray-600">Items Subtotal:</span>
+                <span className="font-medium text-gray-900">
+                  ₹{saleItems.reduce((sum, item) => sum + item.price, 0).toFixed(2)}
+                </span>
               </div>
-              {serviceDiscountAmount > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Service Discount:</span>
-                  <span className="font-medium text-orange-600">-₹{serviceDiscountAmount.toFixed(2)}</span>
-                </div>
-              )}
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Subtotal:</span>
-                <span className="font-medium text-gray-900">₹{subtotal.toFixed(2)}</span>
+                <span className="text-gray-600">Total Item Discounts:</span>
+                <span className="font-medium text-orange-600">
+                  -₹{saleItems.reduce((sum, item) => sum + item.discount, 0).toFixed(2)}
+                </span>
               </div>
-              {overallDiscountAmount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Subtotal after Item Discounts:</span>
+                <span className="font-medium text-gray-900">
+                  ₹{Math.max(0, saleItems.reduce((sum, item) => sum + item.total, 0)).toFixed(2)}
+                </span>
+              </div>
+              {(Number(overallDiscount) || 0) > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Overall Discount:</span>
-                  <span className="font-medium text-orange-600">-₹{overallDiscountAmount.toFixed(2)}</span>
+                  <span className="font-medium text-orange-600">-₹{Number(overallDiscount).toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-300">
                 <span className="text-gray-900">Final Total:</span>
-                <span className="text-green-600">₹{finalTotal.toFixed(2)}</span>
+                <span className="text-green-600">
+                  ₹{Math.max(0, saleItems.reduce((sum, item) => sum + item.total, 0) - (Number(overallDiscount) || 0)).toFixed(2)}
+                </span>
               </div>
             </div>
 
@@ -313,7 +486,7 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
             </button>
             <button
               type="submit"
-              disabled={loading || !selectedServiceId || !adminPassword}
+              disabled={loading || saleItems.length === 0 || !adminPassword}
               className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {loading ? 'Updating...' : 'Update Sale'}

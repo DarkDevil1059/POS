@@ -45,7 +45,7 @@ const AppContent: React.FC = () => {
         setNeedsAdminPassword(!data);
       } catch (error) {
         console.error('Error checking admin password:', error);
-        setNeedsAdminPassword(true);
+        setNeedsAdminPassword(false);
       } finally {
         setCheckingAdminPassword(false);
       }
@@ -94,8 +94,8 @@ const AppContent: React.FC = () => {
   const themeClass = settings?.theme_style === 'dark'
     ? 'theme-dark'
     : settings?.theme_style === 'glass'
-    ? 'theme-glass'
-    : 'theme-light';
+      ? 'theme-glass'
+      : 'theme-light';
 
   return (
     <div className={`min-h-screen flex flex-col md:flex-row ${themeClass}`}>
