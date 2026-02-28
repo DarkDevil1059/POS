@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Calendar, PieChart, TrendingUp } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatCurrency } from '../../utils/format';
 
 interface PaymentMethodStats {
   payment_mode: string;
@@ -77,10 +78,10 @@ const PaymentMethodReports: React.FC = () => {
       const paymentStats = (salesData || []).reduce((acc, sale) => {
         // Handle cases where payment_mode column might not exist or be null
         const paymentMode = sale.payment_mode || 'cash';
-        
+
         if (!acc[paymentMode]) {
-          acc[paymentMode] = { 
-            total_sales: 0, 
+          acc[paymentMode] = {
+            total_sales: 0,
             total_revenue: 0
           };
         }
@@ -102,7 +103,7 @@ const PaymentMethodReports: React.FC = () => {
       setPaymentData(sortedPaymentData);
     } catch (error) {
       console.error('Error fetching payment data:', error);
-      
+
       // Check if the error is due to missing payment_mode column
       if (error.message && error.message.includes('payment_mode does not exist')) {
         // Fallback: fetch sales without payment_mode and assume all are cash
@@ -161,7 +162,7 @@ const PaymentMethodReports: React.FC = () => {
   const getPaymentModeColor = (index: number) => {
     const colors = [
       'bg-blue-500',
-      'bg-green-500', 
+      'bg-green-500',
       'bg-purple-500',
       'bg-orange-500',
       'bg-red-500'
@@ -199,22 +200,21 @@ const PaymentMethodReports: React.FC = () => {
               <Calendar className="w-5 h-5 text-gray-400" />
               <span className="font-medium text-gray-700">Period:</span>
             </div>
-            
+
             <div className="flex gap-2">
               {['day', 'week', 'month', 'quarter', 'custom'].map((range) => (
                 <button
                   key={range}
                   onClick={() => setDateRange(range)}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                    dateRange === range
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${dateRange === range
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   {range === 'day' ? 'Today' :
-                   range === 'week' ? 'Week' : 
-                   range === 'month' ? 'Month' : 
-                   range === 'quarter' ? 'Quarter' : 'Custom'}
+                    range === 'week' ? 'Week' :
+                      range === 'month' ? 'Month' :
+                        range === 'quarter' ? 'Quarter' : 'Custom'}
                 </button>
               ))}
             </div>
@@ -251,7 +251,7 @@ const PaymentMethodReports: React.FC = () => {
               paymentData.map((payment, index) => {
                 const maxRevenue = Math.max(...paymentData.map(p => p.total_revenue), 1);
                 const barWidth = (payment.total_revenue / maxRevenue) * 100;
-                
+
                 return (
                   <div key={payment.payment_mode} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -263,7 +263,7 @@ const PaymentMethodReports: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-blue-600">₹{payment.total_revenue.toFixed(2)}</div>
+                        <div className="font-bold text-blue-600">{formatCurrency(payment.total_revenue)}</div>
                         <div className="text-sm text-gray-500">{payment.percentage.toFixed(1)}%</div>
                       </div>
                     </div>
@@ -299,7 +299,7 @@ const PaymentMethodReports: React.FC = () => {
                   {paymentData[0].total_sales} transactions
                 </div>
                 <div className="text-sm text-gray-500">
-                  ₹{paymentData[0].total_revenue.toFixed(2)} ({paymentData[0].percentage.toFixed(1)}%)
+                  {formatCurrency(paymentData[0].total_revenue)} ({paymentData[0].percentage.toFixed(1)}%)
                 </div>
               </div>
             )}
@@ -330,11 +330,11 @@ const PaymentMethodReports: React.FC = () => {
             </div>
             <div className="space-y-2">
               <div className="text-2xl font-bold text-gray-900">
-                ₹{paymentData.length > 0 ? (paymentData.reduce((sum, p) => sum + p.total_revenue, 0) / paymentData.reduce((sum, p) => sum + p.total_sales, 0)).toFixed(2) : '0.00'}
+                {paymentData.length > 0 ? formatCurrency(paymentData.reduce((sum, p) => sum + p.total_revenue, 0) / paymentData.reduce((sum, p) => sum + p.total_sales, 0)) : formatCurrency(0)}
               </div>
               <div className="text-purple-600 font-semibold">per transaction</div>
               <div className="text-sm text-gray-500">
-                Total Revenue: ₹{paymentData.reduce((sum, p) => sum + p.total_revenue, 0).toFixed(2)}
+                Total Revenue: {formatCurrency(paymentData.reduce((sum, p) => sum + p.total_revenue, 0))}
               </div>
             </div>
           </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, Calendar, DollarSign, BarChart3, Download } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { DailySalesData } from '../../types';
+import { formatCurrency } from '../../utils/format';
 
 const SalesReports: React.FC = () => {
   const { supabaseClient } = useAuth();
@@ -121,7 +122,7 @@ const SalesReports: React.FC = () => {
       ])
     ];
 
-    const csvContent = csvData.map(row => 
+    const csvContent = csvData.map(row =>
       row.map(field => `"${field}"`).join(',')
     ).join('\n');
 
@@ -168,7 +169,7 @@ const SalesReports: React.FC = () => {
               <p className="text-gray-600">{getDateRangeLabel()} Overview</p>
             </div>
           </div>
-          
+
           <button
             onClick={exportData}
             className="bg-blue-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm md:text-base"
@@ -186,22 +187,21 @@ const SalesReports: React.FC = () => {
               <Calendar className="w-5 h-5 text-gray-400" />
               <span className="font-medium text-gray-700">Date Range:</span>
             </div>
-            
+
             <div className="flex flex-wrap gap-2">
               {['day', 'week', 'month', 'quarter', 'custom'].map((range) => (
                 <button
                   key={range}
                   onClick={() => setDateRange(range)}
-                  className={`px-2 md:px-3 py-1 rounded-lg text-xs md:text-sm font-medium transition-colors ${
-                    dateRange === range
+                  className={`px-2 md:px-3 py-1 rounded-lg text-xs md:text-sm font-medium transition-colors ${dateRange === range
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   {range === 'day' ? 'Today' :
-                   range === 'week' ? 'Week' : 
-                   range === 'month' ? 'Month' : 
-                   range === 'quarter' ? 'Quarter' : 'Custom'}
+                    range === 'week' ? 'Week' :
+                      range === 'month' ? 'Month' :
+                        range === 'quarter' ? 'Quarter' : 'Custom'}
                 </button>
               ))}
             </div>
@@ -232,7 +232,7 @@ const SalesReports: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-xl md:text-3xl font-bold text-blue-600">₹{totalRevenue.toFixed(2)}</p>
+                <p className="text-xl md:text-3xl font-bold text-blue-600">{formatCurrency(totalRevenue)}</p>
               </div>
               <div className="bg-blue-100 rounded-lg p-3">
                 <DollarSign className="w-6 h-6 text-blue-600" />
@@ -256,7 +256,7 @@ const SalesReports: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Daily Average</p>
-                <p className="text-xl md:text-3xl font-bold text-purple-600">₹{averageDaily.toFixed(2)}</p>
+                <p className="text-xl md:text-3xl font-bold text-purple-600">{formatCurrency(averageDaily)}</p>
               </div>
               <div className="bg-purple-100 rounded-lg p-3">
                 <TrendingUp className="w-6 h-6 text-purple-600" />
@@ -287,7 +287,7 @@ const SalesReports: React.FC = () => {
                         }}
                       >
                         <div className="absolute -top-6 md:-top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-1 md:px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                          ₹{day.total_revenue.toFixed(2)}
+                          {formatCurrency(day.total_revenue)}
                         </div>
                       </div>
                       <div className="text-xs text-gray-500 mt-1 md:mt-2 transform -rotate-45 origin-left">
@@ -361,10 +361,10 @@ const SalesReports: React.FC = () => {
                     <tr key={day.date} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                       <td className="p-2 md:p-4">
                         <div className="font-medium text-gray-900 text-xs md:text-sm">
-                          {new Date(day.date).toLocaleDateString('en-US', { 
+                          {new Date(day.date).toLocaleDateString('en-US', {
                             weekday: window.innerWidth < 768 ? undefined : 'short',
-                            month: 'short', 
-                            day: 'numeric' 
+                            month: 'short',
+                            day: 'numeric'
                           })}
                         </div>
                       </td>
@@ -372,15 +372,15 @@ const SalesReports: React.FC = () => {
                         <div className="font-medium text-gray-900 text-sm md:text-base">{day.total_sales}</div>
                       </td>
                       <td className="p-2 md:p-4 text-right">
-                        <div className="font-bold text-green-600 text-sm md:text-base">₹{day.total_revenue.toFixed(2)}</div>
+                        <div className="font-bold text-green-600 text-sm md:text-base">{formatCurrency(day.total_revenue)}</div>
                         {/* Show avg on mobile */}
                         <div className="text-xs text-gray-500 md:hidden">
-                          Avg: ₹{day.total_sales > 0 ? (day.total_revenue / day.total_sales).toFixed(2) : '0.00'}
+                          Avg: {day.total_sales > 0 ? formatCurrency(day.total_revenue / day.total_sales) : formatCurrency(0)}
                         </div>
                       </td>
                       <td className="p-2 md:p-4 text-right hidden md:table-cell">
                         <div className="text-gray-600">
-                          ₹{day.total_sales > 0 ? (day.total_revenue / day.total_sales).toFixed(2) : '0.00'}
+                          {day.total_sales > 0 ? formatCurrency(day.total_revenue / day.total_sales) : formatCurrency(0)}
                         </div>
                       </td>
                     </tr>

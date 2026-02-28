@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SaleWithDetails, Customer, Staff, Service } from '../../types';
 import { hashPassword } from '../Settings/AdminSettings';
+import { formatCurrency } from '../../utils/format';
 
 interface EditSaleModalProps {
   isOpen: boolean;
@@ -318,7 +319,7 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
                                   }}
                                 >
                                   <div className="font-medium text-gray-900">{service.name}</div>
-                                  <div className="text-gray-500">₹{Number(service.price).toFixed(2)}</div>
+                                  <div className="text-gray-500">{formatCurrency(Number(service.price))}</div>
                                 </div>
                               ))}
                             {services.filter(service => service.name.toLowerCase().includes((serviceSearchQueries[index] || '').toLowerCase())).length === 0 && (
@@ -389,7 +390,7 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
                     </div>
                     <div className="w-1/3 text-right">
                       <div className="text-xs text-gray-500 mb-1">Item Total</div>
-                      <div className="font-semibold text-gray-900">₹{item.total.toFixed(2)}</div>
+                      <div className="font-semibold text-gray-900">{formatCurrency(item.total)}</div>
                     </div>
                   </div>
                 </div>
@@ -431,31 +432,31 @@ const EditSaleModal: React.FC<EditSaleModalProps> = ({ isOpen, onClose, sale, on
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Items Subtotal:</span>
                 <span className="font-medium text-gray-900">
-                  ₹{saleItems.reduce((sum, item) => sum + item.price, 0).toFixed(2)}
+                  {formatCurrency(saleItems.reduce((sum, item) => sum + item.price, 0))}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Total Item Discounts:</span>
                 <span className="font-medium text-orange-600">
-                  -₹{saleItems.reduce((sum, item) => sum + item.discount, 0).toFixed(2)}
+                  -{formatCurrency(saleItems.reduce((sum, item) => sum + item.discount, 0))}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Subtotal after Item Discounts:</span>
                 <span className="font-medium text-gray-900">
-                  ₹{Math.max(0, saleItems.reduce((sum, item) => sum + item.total, 0)).toFixed(2)}
+                  {formatCurrency(Math.max(0, saleItems.reduce((sum, item) => sum + item.total, 0)))}
                 </span>
               </div>
               {(Number(overallDiscount) || 0) > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Overall Discount:</span>
-                  <span className="font-medium text-orange-600">-₹{Number(overallDiscount).toFixed(2)}</span>
+                  <span className="font-medium text-orange-600">-{formatCurrency(Number(overallDiscount))}</span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-300">
                 <span className="text-gray-900">Final Total:</span>
                 <span className="text-green-600">
-                  ₹{Math.max(0, saleItems.reduce((sum, item) => sum + item.total, 0) - (Number(overallDiscount) || 0)).toFixed(2)}
+                  {formatCurrency(Math.max(0, saleItems.reduce((sum, item) => sum + item.total, 0) - (Number(overallDiscount) || 0)))}
                 </span>
               </div>
             </div>

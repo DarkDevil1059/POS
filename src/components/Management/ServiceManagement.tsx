@@ -3,6 +3,7 @@ import { Briefcase, Plus, Edit, Trash2, Save, X, DollarSign, Upload, Download, F
 import { useAuth } from '../../contexts/AuthContext';
 import { Service } from '../../types';
 import * as XLSX from 'xlsx';
+import { formatCurrency } from '../../utils/format';
 
 const ServiceManagement: React.FC = () => {
   const { supabaseClient } = useAuth();
@@ -44,13 +45,13 @@ const ServiceManagement: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const price = parseFloat(formData.price);
     if (isNaN(price) || price < 0) {
       alert('Please enter a valid price');
       return;
     }
-    
+
     if (!formData.name.trim()) {
       alert('Please enter a service name');
       return;
@@ -72,7 +73,7 @@ const ServiceManagement: React.FC = () => {
 
         if (error) throw error;
 
-        setServices(services.map(service => 
+        setServices(services.map(service =>
           service.id === editingId ? data : service
         ));
         setEditingId(null);
@@ -92,11 +93,11 @@ const ServiceManagement: React.FC = () => {
         setServices([...services, data]);
         setShowAddForm(false);
       }
-      
+
       setFormData({ name: '', price: '' });
     } catch (error) {
       console.error('Error saving service:', error);
-      
+
       if (error.message?.includes('duplicate key')) {
         alert('A service with this name already exists. Please choose a different name.');
       } else {
@@ -107,8 +108,8 @@ const ServiceManagement: React.FC = () => {
 
   const handleEdit = (service: Service) => {
     setEditingId(service.id);
-    setFormData({ 
-      name: service.name, 
+    setFormData({
+      name: service.name,
       price: service.price.toString()
     });
   };
@@ -153,7 +154,7 @@ const ServiceManagement: React.FC = () => {
       alert('Service deleted successfully');
     } catch (error) {
       console.error('Error deleting service:', error);
-      
+
       // Provide more specific error messages
       if (error.message?.includes('foreign key')) {
         alert('Cannot delete this service because it is referenced in sales records. Services that have been sold cannot be deleted to maintain data integrity.');
@@ -197,35 +198,35 @@ const ServiceManagement: React.FC = () => {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const rowNumber = i + 2; // +2 because we skipped header and arrays are 0-indexed
-        
+
         if (!row || row.length < 2) continue; // Skip empty rows
-        
+
         const name = row[0]?.toString().trim();
         const priceStr = row[1]?.toString().trim();
-        
+
         if (!name) {
           errors.push(`Row ${rowNumber}: Service name is required`);
           continue;
         }
-        
+
         const price = parseFloat(priceStr);
         if (isNaN(price) || price < 0) {
           errors.push(`Row ${rowNumber}: Invalid price "${priceStr}". Must be a positive number.`);
           continue;
         }
-        
+
         // Check for duplicate names in the import
         if (validServices.some(s => s.name.toLowerCase() === name.toLowerCase())) {
           errors.push(`Row ${rowNumber}: Duplicate service name "${name}" in import file`);
           continue;
         }
-        
+
         // Check if service already exists in database
         if (services.some(s => s.name.toLowerCase() === name.toLowerCase())) {
           errors.push(`Row ${rowNumber}: Service "${name}" already exists in database`);
           continue;
         }
-        
+
         validServices.push({ name, price });
       }
 
@@ -258,7 +259,7 @@ const ServiceManagement: React.FC = () => {
       setServices([...services, ...data]);
       setShowImportModal(false);
       alert(`Successfully imported ${validServices.length} services!`);
-      
+
     } catch (error) {
       console.error('Error importing services:', error);
       alert(`Error importing services: ${error.message || 'Unknown error'}`);
@@ -347,7 +348,7 @@ const ServiceManagement: React.FC = () => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Import Services from Excel</h3>
-              
+
               <div className="space-y-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -514,7 +515,7 @@ const ServiceManagement: React.FC = () => {
                           </div>
                         ) : (
                           <div className="text-sm md:text-lg font-bold text-green-600">
-                            ₹{Number(service.price).toFixed(2)}
+                            {formatCurrency(Number(service.price))}
                           </div>
                         )}
                       </td>

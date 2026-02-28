@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trash2, Lock, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { setLastAuthTime, isWithinCooldown, hashPassword } from '../Settings/AdminSettings';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatCurrency } from '../../utils/format';
 
 interface DeleteSaleModalProps {
   isOpen: boolean;
@@ -157,7 +158,7 @@ const DeleteSaleModal: React.FC<DeleteSaleModalProps> = ({
             </p>
             <div className="bg-white rounded border p-3 text-sm">
               <div className="font-medium text-gray-900">{saleName}</div>
-              <div className="text-red-600 font-bold">₹{saleAmount.toFixed(2)}</div>
+              <div className="text-red-600 font-bold">{formatCurrency(saleAmount)}</div>
             </div>
             <p className="text-xs text-red-600 mt-2">
               This action cannot be undone and will affect your sales reports.

@@ -3,6 +3,7 @@ import { Users, Plus, Edit, Trash2, Save, X, Upload, Download, FileSpreadsheet, 
 import { useAuth } from '../../contexts/AuthContext';
 import { Customer, Sale } from '../../types';
 import * as XLSX from 'xlsx';
+import { formatCurrency } from '../../utils/format';
 
 const CustomerManagement: React.FC = () => {
   const { supabaseClient } = useAuth();
@@ -55,43 +56,43 @@ const CustomerManagement: React.FC = () => {
     };
   }, [searchQuery]);
 
-const searchAndPaginate = async (query: string, page: number) => {
-  try {
-    setLoading(true);
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) return;
+  const searchAndPaginate = async (query: string, page: number) => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) return;
 
-    const from = (page - 1) * itemsPerPage;
-    const to = from + itemsPerPage - 1;
+      const from = (page - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
 
-    let queryBuilder = supabaseClient
-      .from('customers')
-      .select('*', { count: 'exact' })
-      .eq('user_id', user.id);
+      let queryBuilder = supabaseClient
+        .from('customers')
+        .select('*', { count: 'exact' })
+        .eq('user_id', user.id);
 
-    if (query.trim()) {
-      queryBuilder = queryBuilder.or(
-        `name.ilike.%${query}%,contact.ilike.%${query}%`
-      );
+      if (query.trim()) {
+        queryBuilder = queryBuilder.or(
+          `name.ilike.%${query}%,contact.ilike.%${query}%`
+        );
+      }
+
+      const { data, error, count } = await queryBuilder
+        .order('name', { ascending: true })
+        .range(from, to);
+
+      if (error) throw error;
+
+      setCustomers(data || []);
+      setTotalCount(count || 0);
+      setCurrentPage(page);
+    } catch (err) {
+      console.error('Error fetching customers:', err);
+      setCustomers([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
     }
-
-    const { data, error, count } = await queryBuilder
-      .order('name', { ascending: true })
-      .range(from, to);
-
-    if (error) throw error;
-
-    setCustomers(data || []);
-    setTotalCount(count || 0);
-    setCurrentPage(page);
-  } catch (err) {
-    console.error('Error fetching customers:', err);
-    setCustomers([]);
-    setTotalCount(0);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -276,22 +277,22 @@ const searchAndPaginate = async (query: string, page: number) => {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const rowNumber = i + 2; // +2 because we skipped header and arrays are 0-indexed
-        
+
         if (!row || row.length < 1) continue; // Skip empty rows
-        
+
         const name = row[0]?.toString().trim();
         const contact = row[1]?.toString().trim() || null;
-        
+
         if (!name) {
           errors.push(`Row ${rowNumber}: Customer name is required`);
           continue;
         }
-        
+
         if (validCustomers.some(c => c.name.toLowerCase() === name.toLowerCase())) {
           errors.push(`Row ${rowNumber}: Duplicate customer name "${name}" in import file`);
           continue;
         }
-        
+
         validCustomers.push({ name, contact });
       }
 
@@ -322,7 +323,7 @@ const searchAndPaginate = async (query: string, page: number) => {
       await searchAndPaginate('', 1);
       setShowImportModal(false);
       alert(`Successfully imported ${validCustomers.length} customers!`);
-      
+
     } catch (error) {
       console.error('Error importing customers:', error);
       alert(`Error importing customers: ${error.message || 'Unknown error'}`);
@@ -358,7 +359,7 @@ const searchAndPaginate = async (query: string, page: number) => {
               <p className="text-gray-600">{totalCount} customers</p>
             </div>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
             <button
               onClick={() => setShowImportModal(true)}
@@ -430,7 +431,7 @@ const searchAndPaginate = async (query: string, page: number) => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Import Customers from Excel</h3>
-              
+
               <div className="space-y-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -712,13 +713,13 @@ const searchAndPaginate = async (query: string, page: number) => {
                       <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                         <div className="text-sm text-green-600 font-medium mb-1">Total Spent</div>
                         <div className="text-2xl font-bold text-green-900">
-                          ₹{customerSales.reduce((sum, sale) => sum + Number(sale.total), 0).toFixed(2)}
+                          {formatCurrency(customerSales.reduce((sum, sale) => sum + Number(sale.total), 0))}
                         </div>
                       </div>
                       <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
                         <div className="text-sm text-orange-600 font-medium mb-1">Avg. Transaction</div>
                         <div className="text-2xl font-bold text-orange-900">
-                          ₹{(customerSales.reduce((sum, sale) => sum + Number(sale.total), 0) / customerSales.length).toFixed(2)}
+                          {formatCurrency(customerSales.reduce((sum, sale) => sum + Number(sale.total), 0) / customerSales.length)}
                         </div>
                       </div>
                     </div>
@@ -756,7 +757,7 @@ const searchAndPaginate = async (query: string, page: number) => {
                               </td>
                               <td className="p-3 text-right">
                                 <div className="text-sm font-semibold text-green-600">
-                                  ₹{Number(sale.total).toFixed(2)}
+                                  {formatCurrency(Number(sale.total))}
                                 </div>
                               </td>
                             </tr>

@@ -22,6 +22,7 @@ import { SaleWithDetails } from '../../types';
 import DeleteSaleModal from './DeleteSaleModal';
 import EditSaleModal from './EditSaleModal';
 import { useSettings } from '../../contexts/SettingsContext';
+import { formatCurrency } from '../../utils/format';
 
 interface FilterState {
   dateRange: 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom';
@@ -418,10 +419,10 @@ const SalesHistory: React.FC = () => {
         return `
           <tr>
             <td>${service?.name || "Service"}</td>
-            <td style="text-align:right;">₹${unitPrice.toFixed(2)}</td>
+            <td style="text-align:right;">${formatCurrency(unitPrice)}</td>
             <td style="text-align:center;">${group.quantity}</td>
-            <td style="text-align:right;">₹${group.totalDiscount.toFixed(2)}</td>
-            <td style="text-align:right;">₹${group.totalAmount.toFixed(2)}</td>
+            <td style="text-align:right;">${formatCurrency(group.totalDiscount)}</td>
+            <td style="text-align:right;">${formatCurrency(group.totalAmount)}</td>
           </tr>
         `;
       }).join("");
@@ -486,12 +487,12 @@ const SalesHistory: React.FC = () => {
         </tbody>
       </table>
       <div class="totals">
-        Sub Total: ₹${subTotal.toFixed(2)}<br/>
-        ${totalDiscount > 0 ? `Total Discounts: ₹${totalDiscount.toFixed(2)}<br/>` : ""}
+        Sub Total: ${formatCurrency(subTotal)}<br/>
+        ${totalDiscount > 0 ? `Total Discounts: ${formatCurrency(totalDiscount)}<br/>` : ""}
       </div>
       <hr class="bold-line" />
       <div class="grand-total">
-        Grand Total: ₹${finalTotal.toFixed(2)}
+        Grand Total: ${formatCurrency(finalTotal)}
       </div>
       ${settings?.receipt_footer ? `<div class="footer"><strong>${settings.receipt_footer}</strong></div>` : ''}
     </div>
@@ -679,7 +680,7 @@ const SalesHistory: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                  <p className="text-2xl font-bold text-green-600">₹{summaryStats.totalRevenue.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(summaryStats.totalRevenue)}</p>
                 </div>
                 <div className="bg-green-100 rounded-lg p-3">
                   <DollarSign className="w-6 h-6 text-green-600" />
@@ -690,7 +691,7 @@ const SalesHistory: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Discounts</p>
-                  <p className="text-2xl font-bold text-orange-600">₹{summaryStats.totalDiscount.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-orange-600">{formatCurrency(summaryStats.totalDiscount)}</p>
                 </div>
                 <div className="bg-orange-100 rounded-lg p-3">
                   <Users className="w-6 h-6 text-orange-600" />
@@ -967,11 +968,11 @@ const SalesHistory: React.FC = () => {
                           </td>
                           <td className="p-4 text-right">
                             <div className="text-lg font-bold text-green-600">
-                              ₹{Number(sale.total).toFixed(2)}
+                              {formatCurrency(Number(sale.total))}
                             </div>
                             {Number(sale.discount_amount || 0) > 0 && (
                               <div className="text-sm text-orange-600">
-                                -₹{Number(sale.discount_amount).toFixed(2)} discount
+                                -{formatCurrency(Number(sale.discount_amount))} discount
                               </div>
                             )}
                           </td>
@@ -1038,11 +1039,11 @@ const SalesHistory: React.FC = () => {
                       </div>
                       <div className="text-right">
                         <div className="text-xl font-bold text-green-600">
-                          ₹{Number(sale.total).toFixed(2)}
+                          {formatCurrency(Number(sale.total))}
                         </div>
                         {Number(sale.discount_amount || 0) > 0 && (
                           <div className="text-sm text-orange-600">
-                            -₹{Number(sale.discount_amount).toFixed(2)}
+                            -{formatCurrency(Number(sale.discount_amount))}
                           </div>
                         )}
                       </div>

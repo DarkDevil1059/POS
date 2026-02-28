@@ -3,6 +3,7 @@ import { ArrowRight, ArrowLeft, Check, User, ShoppingBag, Receipt, Search, Plus,
 import { useAuth } from '../../contexts/AuthContext';
 import { Customer, Staff, Service, SaleItem } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
+import { formatCurrency } from '../../utils/format';
 
 const POSScreen: React.FC = () => {
   const { supabaseClient } = useAuth();
@@ -10,13 +11,13 @@ const POSScreen: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  
+
   // Wizard state
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedServices, setSelectedServices] = useState<SaleItem[]>([]);
   const [overallDiscount, setOverallDiscount] = useState({ type: 'percentage' as 'percentage' | 'amount', value: 0 });
-  
+
   // UI state
   const [customerSearch, setCustomerSearch] = useState('');
   const [serviceSearch, setServiceSearch] = useState('');
@@ -30,7 +31,7 @@ const POSScreen: React.FC = () => {
   const [customerHistory, setCustomerHistory] = useState<any>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  
+
   // Post-sale popup state
   const [showSaleCompleteModal, setShowSaleCompleteModal] = useState(false);
   const [completedSale, setCompletedSale] = useState<any>(null);
@@ -48,66 +49,66 @@ const POSScreen: React.FC = () => {
     };
   }, [supabaseClient]);
 
-const fetchData = async () => {
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  if (!user) return;
+  const fetchData = async () => {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return;
 
-  let allCustomers: Customer[] = [];
-  let from = 0;
-  const PAGE_SIZE = 1000;
+    let allCustomers: Customer[] = [];
+    let from = 0;
+    const PAGE_SIZE = 1000;
 
-  while (true) {
-    const { data, error } = await supabaseClient
-      .from('customers')
+    while (true) {
+      const { data, error } = await supabaseClient
+        .from('customers')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('name')
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        console.error(error);
+        break;
+      }
+
+      if (!data || data.length === 0) break;
+
+      allCustomers = [...allCustomers, ...data];
+
+      if (data.length < PAGE_SIZE) break;
+
+      from += PAGE_SIZE;
+    }
+
+    setCustomers(allCustomers);
+
+    // Fetch staff
+    const { data: staffData, error: staffError } = await supabaseClient
+      .from('staff')
       .select('*')
       .eq('user_id', user.id)
       .order('name')
-      .range(from, from + PAGE_SIZE - 1);
+      .limit(10000);
 
-    if (error) {
-      console.error(error);
-      break;
+    if (staffError) {
+      console.error('Error fetching staff:', staffError);
+    } else {
+      setStaff(staffData || []);
     }
 
-    if (!data || data.length === 0) break;
+    // Fetch services
+    const { data: servicesData, error: servicesError } = await supabaseClient
+      .from('services')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('name')
+      .limit(10000);
 
-    allCustomers = [...allCustomers, ...data];
-
-    if (data.length < PAGE_SIZE) break;
-
-    from += PAGE_SIZE;
-  }
-
-  setCustomers(allCustomers);
-
-  // Fetch staff
-  const { data: staffData, error: staffError } = await supabaseClient
-    .from('staff')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('name')
-    .limit(10000);
-
-  if (staffError) {
-    console.error('Error fetching staff:', staffError);
-  } else {
-    setStaff(staffData || []);
-  }
-
-  // Fetch services
-  const { data: servicesData, error: servicesError } = await supabaseClient
-    .from('services')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('name')
-    .limit(10000);
-
-  if (servicesError) {
-    console.error('Error fetching services:', servicesError);
-  } else {
-    setServices(servicesData || []);
-  }
-};
+    if (servicesError) {
+      console.error('Error fetching services:', servicesError);
+    } else {
+      setServices(servicesData || []);
+    }
+  };
 
   const refetchCustomers = async () => {
     try {
@@ -190,87 +191,87 @@ const fetchData = async () => {
     }
   };
 
- const fetchCustomerHistory = async () => {
-  if (!selectedCustomer) return;
+  const fetchCustomerHistory = async () => {
+    if (!selectedCustomer) return;
 
-  setHistoryLoading(true);
-  setShowHistory(true);
-  try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+    setHistoryLoading(true);
+    setShowHistory(true);
+    try {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-    // Get most recent sale record for this customer
-    const { data: latestSale, error: latestError } = await supabaseClient
-      .from('sales')
-      .select('date')
-      .eq('user_id', user.id)
-      .eq('customer_id', selectedCustomer.id)
-      .order('date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      // Get most recent sale record for this customer
+      const { data: latestSale, error: latestError } = await supabaseClient
+        .from('sales')
+        .select('date')
+        .eq('user_id', user.id)
+        .eq('customer_id', selectedCustomer.id)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (latestError) throw latestError;
-    if (!latestSale) {
+      if (latestError) throw latestError;
+      if (!latestSale) {
+        setCustomerHistory(null);
+        return;
+      }
+
+      const lastDate = new Date(latestSale.date);
+      const startOfDay = new Date(lastDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(lastDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Fetch all sales from that SAME DAY
+      const { data: allSalesFromLastVisit, error: salesError } = await supabaseClient
+        .from('sales')
+        .select('service_id, date, total')
+        .eq('user_id', user.id)
+        .eq('customer_id', selectedCustomer.id)
+        .gte('date', startOfDay.toISOString())
+        .lte('date', endOfDay.toISOString())
+        .order('date', { ascending: true });
+
+      if (salesError) throw salesError;
+      if (!allSalesFromLastVisit || allSalesFromLastVisit.length === 0) {
+        setCustomerHistory(null);
+        return;
+      }
+
+      // Collect all unique services
+      const uniqueServiceIds = [...new Set(allSalesFromLastVisit.map(sale => sale.service_id))];
+
+      const { data: services, error: serviceError } = await supabaseClient
+        .from('services')
+        .select('id, name')
+        .in('id', uniqueServiceIds);
+
+      if (serviceError) throw serviceError;
+
+      const serviceMap = new Map(services?.map(s => [s.id, s.name]) || []);
+      const serviceNames = uniqueServiceIds
+        .map(id => serviceMap.get(id) || 'Unknown Service')
+        .join(', ');
+
+      const totalAmount = allSalesFromLastVisit.reduce((sum, sale) => sum + Number(sale.total), 0);
+
+      setCustomerHistory({
+        serviceName: serviceNames,
+        date: allSalesFromLastVisit[0].date,
+        total: totalAmount
+      });
+    } catch (error) {
+      console.error('Error fetching customer history:', error);
       setCustomerHistory(null);
-      return;
+    } finally {
+      setHistoryLoading(false);
     }
-
-    const lastDate = new Date(latestSale.date);
-    const startOfDay = new Date(lastDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(lastDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Fetch all sales from that SAME DAY
-    const { data: allSalesFromLastVisit, error: salesError } = await supabaseClient
-      .from('sales')
-      .select('service_id, date, total')
-      .eq('user_id', user.id)
-      .eq('customer_id', selectedCustomer.id)
-      .gte('date', startOfDay.toISOString())
-      .lte('date', endOfDay.toISOString())
-      .order('date', { ascending: true });
-
-    if (salesError) throw salesError;
-    if (!allSalesFromLastVisit || allSalesFromLastVisit.length === 0) {
-      setCustomerHistory(null);
-      return;
-    }
-
-    // Collect all unique services
-    const uniqueServiceIds = [...new Set(allSalesFromLastVisit.map(sale => sale.service_id))];
-
-    const { data: services, error: serviceError } = await supabaseClient
-      .from('services')
-      .select('id, name')
-      .in('id', uniqueServiceIds);
-
-    if (serviceError) throw serviceError;
-
-    const serviceMap = new Map(services?.map(s => [s.id, s.name]) || []);
-    const serviceNames = uniqueServiceIds
-      .map(id => serviceMap.get(id) || 'Unknown Service')
-      .join(', ');
-
-    const totalAmount = allSalesFromLastVisit.reduce((sum, sale) => sum + Number(sale.total), 0);
-
-    setCustomerHistory({
-      serviceName: serviceNames,
-      date: allSalesFromLastVisit[0].date,
-      total: totalAmount
-    });
-  } catch (error) {
-    console.error('Error fetching customer history:', error);
-    setCustomerHistory(null);
-  } finally {
-    setHistoryLoading(false);
-  }
-};
+  };
 
 
   const addService = (service: Service) => {
     const existingItem = selectedServices.find(item => item.service_id === service.id);
-    
+
     if (existingItem) {
       setSelectedServices(selectedServices.map(item =>
         item.service_id === service.id
@@ -299,7 +300,7 @@ const fetchData = async () => {
       removeService(serviceId);
       return;
     }
-    
+
     setSelectedServices(selectedServices.map(item =>
       item.service_id === serviceId
         ? { ...item, quantity }
@@ -309,14 +310,14 @@ const fetchData = async () => {
 
   const updateServiceStaff = (serviceId: string, staffId: string) => {
     const selectedStaffMember = staff.find(s => s.id === staffId);
-    
+
     setSelectedServices(selectedServices.map(item =>
       item.service_id === serviceId
-        ? { 
-            ...item, 
-            staff_id: staffId,
-            staff_name: selectedStaffMember?.name || null
-          }
+        ? {
+          ...item,
+          staff_id: staffId,
+          staff_name: selectedStaffMember?.name || null
+        }
         : item
     ));
   };
@@ -324,25 +325,25 @@ const fetchData = async () => {
   const updateServiceDiscount = (serviceId: string, discountType: 'percentage' | 'amount', discountValue: number) => {
     setSelectedServices(selectedServices.map(item =>
       item.service_id === serviceId
-        ? { 
-            ...item, 
-            discount_type: discountType,
-            discount_percentage: discountType === 'percentage' ? discountValue : undefined,
-            discount_amount: discountType === 'amount' ? discountValue : undefined
-          }
+        ? {
+          ...item,
+          discount_type: discountType,
+          discount_percentage: discountType === 'percentage' ? discountValue : undefined,
+          discount_amount: discountType === 'amount' ? discountValue : undefined
+        }
         : item
     ));
   };
 
   const getServiceDiscountedPrice = (item: SaleItem): number => {
     let discountedPrice = item.price;
-    
+
     if (item.discount_type === 'percentage' && item.discount_percentage) {
       discountedPrice = item.price * (1 - item.discount_percentage / 100);
     } else if (item.discount_type === 'amount' && item.discount_amount) {
       discountedPrice = Math.max(0, item.price - item.discount_amount);
     }
-    
+
     return discountedPrice;
   };
 
@@ -354,17 +355,17 @@ const fetchData = async () => {
 
       // Calculate subtotal (without any discounts)
       const subtotal = selectedServices.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      
+
       // Calculate service-level discounts
       const serviceDiscountTotal = selectedServices.reduce((sum, item) => {
         const originalTotal = item.price * item.quantity;
         const discountedTotal = getServiceDiscountedPrice(item) * item.quantity;
         return sum + (originalTotal - discountedTotal);
       }, 0);
-      
+
       // Calculate subtotal after service discounts
       const subtotalAfterServiceDiscounts = subtotal - serviceDiscountTotal;
-      
+
       // Calculate overall discount
       let overallDiscountAmount = 0;
       if (overallDiscount.value > 0) {
@@ -374,7 +375,7 @@ const fetchData = async () => {
           overallDiscountAmount = Math.min(overallDiscount.value, subtotalAfterServiceDiscounts);
         }
       }
-      
+
       const finalTotal = Math.max(0, subtotalAfterServiceDiscounts - overallDiscountAmount);
 
       // Create single timestamp for all sales in this transaction
@@ -424,7 +425,7 @@ const fetchData = async () => {
       // Show completion modal instead of alert
       setCompletedSale(saleData);
       setShowSaleCompleteModal(true);
-      
+
     } catch (error) {
       console.error('Error completing sale:', error);
       alert(`Error completing sale: ${error.message || 'Unknown error'}`);
@@ -449,41 +450,41 @@ const fetchData = async () => {
     setHistoryLoading(false);
   };
 
-  
-const printReceipt = () => {
-  if (!completedSale) {
-    alert("No sale data available to print.");
-    return;
-  }
 
-  try {
-    const services = completedSale.services || [];
-    const customer = completedSale.customer || {};
+  const printReceipt = () => {
+    if (!completedSale) {
+      alert("No sale data available to print.");
+      return;
+    }
 
-    const receiptRows = services.map((item) => {
-      const originalTotal = item.price * item.quantity;
-      const discountedPrice =
-        item.discount_type === "percentage"
-          ? item.price * (1 - (item.discount_percentage || 0) / 100)
-          : item.discount_type === "amount"
-          ? Math.max(0, item.price - (item.discount_amount || 0))
-          : item.price;
+    try {
+      const services = completedSale.services || [];
+      const customer = completedSale.customer || {};
 
-      const lineTotal = discountedPrice * item.quantity;
-      const discountShown = originalTotal - lineTotal;
+      const receiptRows = services.map((item) => {
+        const originalTotal = item.price * item.quantity;
+        const discountedPrice =
+          item.discount_type === "percentage"
+            ? item.price * (1 - (item.discount_percentage || 0) / 100)
+            : item.discount_type === "amount"
+              ? Math.max(0, item.price - (item.discount_amount || 0))
+              : item.price;
 
-      return `
+        const lineTotal = discountedPrice * item.quantity;
+        const discountShown = originalTotal - lineTotal;
+
+        return `
         <tr>
-          <td>${item.service_name || ""}</td>
-          <td>₹${(item.price || 0).toFixed(2)}</td>
-          <td>${item.quantity || 0}</td>
-          <td>₹${discountShown.toFixed(2)}</td>
-          <td>₹${lineTotal.toFixed(2)}</td>
+          <td>{item.service_name || ""}</td>
+          <td>{formatCurrency(item.price || 0)}</td>
+          <td>{item.quantity || 0}</td>
+          <td>{formatCurrency(discountShown)}</td>
+          <td>{formatCurrency(lineTotal)}</td>
         </tr>
       `;
-    }).join("");
+      }).join("");
 
-const receiptContent = `
+      const receiptContent = `
   <!DOCTYPE html>
   <html lang="en">
   <head>
@@ -543,13 +544,13 @@ const receiptContent = `
         </tbody>
       </table>
       <div class="totals">
-        Sub Total: ₹${(completedSale.subtotal || 0).toFixed(2)}<br/>
-        ${completedSale.serviceDiscountTotal > 0 ? `Service Discounts: ₹${completedSale.serviceDiscountTotal.toFixed(2)}<br/>` : ""}
-        ${completedSale.overallDiscountAmount > 0 ? `Overall Discount: ₹${completedSale.overallDiscountAmount.toFixed(2)}<br/>` : ""}
+        Sub Total: ${formatCurrency(completedSale.subtotal || 0)}<br/>
+        ${completedSale.serviceDiscountTotal > 0 ? `Service Discounts: ${formatCurrency(completedSale.serviceDiscountTotal)}<br/>` : ""}
+        ${completedSale.overallDiscountAmount > 0 ? `Overall Discount: ${formatCurrency(completedSale.overallDiscountAmount)}<br/>` : ""}
       </div>
       <hr class="bold-line" />
       <div class="grand-total">
-        Grand Total: ₹${(completedSale.finalTotal || 0).toFixed(2)}
+        Grand Total: ${formatCurrency(completedSale.finalTotal || 0)}
       </div>
       ${settings?.receipt_footer ? `<div class="footer"><strong>${settings.receipt_footer}</strong></div>` : ''}
     </div>
@@ -558,20 +559,20 @@ const receiptContent = `
 `;
 
 
-    const printWindow = window.open("", "_blank", "width=400,height=600");
-    if (!printWindow) {
-      alert("Unable to open print window. Please check your browser settings.");
-      return;
-    }
+      const printWindow = window.open("", "_blank", "width=400,height=600");
+      if (!printWindow) {
+        alert("Unable to open print window. Please check your browser settings.");
+        return;
+      }
 
-    printWindow.document.write(receiptContent);
-    printWindow.document.close();
-    printWindow.focus();
-  } catch (error) {
-    console.error("Error printing receipt:", error);
-    alert("An unexpected error occurred while preparing the receipt.");
-  }
-};
+      printWindow.document.write(receiptContent);
+      printWindow.document.close();
+      printWindow.focus();
+    } catch (error) {
+      console.error("Error printing receipt:", error);
+      alert("An unexpected error occurred while preparing the receipt.");
+    }
+  };
 
 
   const nextStep = () => {
@@ -600,24 +601,24 @@ const receiptContent = `
 
   // Calculate subtotal (original prices without any discounts)
   const subtotal = selectedServices.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  
+
   // Calculate service-level discounts
   const serviceDiscountTotal = selectedServices.reduce((sum, item) => {
     const originalTotal = item.price * item.quantity;
     const discountedTotal = getServiceDiscountedPrice(item) * item.quantity;
     return sum + (originalTotal - discountedTotal);
   }, 0);
-  
+
   // Calculate subtotal after service discounts
   const subtotalAfterServiceDiscounts = subtotal - serviceDiscountTotal;
-  
+
   // Calculate overall discount
-  const overallDiscountAmount = overallDiscount.value > 0 
-    ? overallDiscount.type === 'percentage' 
+  const overallDiscountAmount = overallDiscount.value > 0
+    ? overallDiscount.type === 'percentage'
       ? subtotalAfterServiceDiscounts * (overallDiscount.value / 100)
       : Math.min(overallDiscount.value, subtotalAfterServiceDiscounts)
     : 0;
-    
+
   const finalTotal = Math.max(0, subtotalAfterServiceDiscounts - overallDiscountAmount);
 
   return (
@@ -637,19 +638,17 @@ const receiptContent = `
             <div className="flex items-center justify-center space-x-4">
               {[1, 2, 3].map((step) => (
                 <div key={step} className="flex items-center">
-                  <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-500 smooth-transition ${
-                    step === currentStep
-                      ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-xl shadow-blue-500/40 scale-125'
-                      : step < currentStep
-                        ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg'
-                        : 'bg-gray-200 text-gray-500'
-                  }`}>
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-500 smooth-transition ${step === currentStep
+                    ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-xl shadow-blue-500/40 scale-125'
+                    : step < currentStep
+                      ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-500'
+                    }`}>
                     {step < currentStep ? <Check className="w-5 h-5" /> : step}
                   </div>
                   {step < 3 && (
-                    <div className={`w-20 h-1.5 mx-3 transition-all duration-500 rounded-full ${
-                      step < currentStep ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gray-200'
-                    }`} />
+                    <div className={`w-20 h-1.5 mx-3 transition-all duration-500 rounded-full ${step < currentStep ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gray-200'
+                      }`} />
                   )}
                 </div>
               ))}
@@ -658,8 +657,8 @@ const receiptContent = `
               <div className="text-sm font-semibold text-gray-700 bg-white px-6 py-2 rounded-full shadow-sm border border-gray-100">
                 Step {currentStep} of 3: {
                   currentStep === 1 ? 'Select Customer' :
-                  currentStep === 2 ? 'Add Services' :
-                  'Review & Confirm'
+                    currentStep === 2 ? 'Add Services' :
+                      'Review & Confirm'
                 }
               </div>
             </div>
@@ -700,11 +699,10 @@ const receiptContent = `
                           <button
                             key={customer.id}
                             onClick={() => setSelectedCustomer(customer)}
-                            className={`p-4 text-left rounded-2xl border-2 transition-all duration-300 smooth-transition ${
-                              selectedCustomer?.id === customer.id
-                                ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-xl shadow-blue-500/20 scale-102'
-                                : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50 hover:shadow-lg hover:scale-102'
-                            }`}
+                            className={`p-4 text-left rounded-2xl border-2 transition-all duration-300 smooth-transition ${selectedCustomer?.id === customer.id
+                              ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-xl shadow-blue-500/20 scale-102'
+                              : 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50 hover:shadow-lg hover:scale-102'
+                              }`}
                           >
                             <div className="font-semibold text-gray-900">{customer.name}</div>
                             <div className="text-sm text-gray-600">{customer.contact || 'No contact'}</div>
@@ -748,7 +746,7 @@ const receiptContent = `
                                 <div className="flex justify-between text-sm">
                                   <span className="text-gray-600">Last Total Bill:</span>
                                   <span className="font-bold text-green-600">
-                                    ₹{Number(customerHistory.total).toFixed(2)}
+                                    {formatCurrency(Number(customerHistory.total))}
                                   </span>
                                 </div>
                               </div>
@@ -763,23 +761,23 @@ const receiptContent = `
                     )}
 
                     <button
-  onClick={() => {
-    // Auto-fill new customer form with whatever was typed
-    if (customerSearch.trim()) {
-      setNewCustomerName(customerSearch.trim());
-      // If it's all numbers, assume it's a phone number
-      if (/^\d+$/.test(customerSearch.trim())) {
-        setNewCustomerContact(customerSearch.trim());
-        setNewCustomerName('');
-      }
-    }
-    setShowAddCustomer(true);
-  }}
-  className="w-full bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 py-3 rounded-2xl hover:from-gray-200 hover:to-gray-300 transition-all duration-300 flex items-center justify-center gap-2 font-semibold shadow-sm hover:shadow-lg smooth-transition"
->
-  <Plus className="w-5 h-5" />
-  Add New Customer
-</button>
+                      onClick={() => {
+                        // Auto-fill new customer form with whatever was typed
+                        if (customerSearch.trim()) {
+                          setNewCustomerName(customerSearch.trim());
+                          // If it's all numbers, assume it's a phone number
+                          if (/^\d+$/.test(customerSearch.trim())) {
+                            setNewCustomerContact(customerSearch.trim());
+                            setNewCustomerName('');
+                          }
+                        }
+                        setShowAddCustomer(true);
+                      }}
+                      className="w-full bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 py-3 rounded-2xl hover:from-gray-200 hover:to-gray-300 transition-all duration-300 flex items-center justify-center gap-2 font-semibold shadow-sm hover:shadow-lg smooth-transition"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Add New Customer
+                    </button>
 
                   </>
                 ) : (
@@ -811,15 +809,15 @@ const receiptContent = `
                           Add Customer
                         </button>
                         <button
-                      onClick={() => {
-                                    setShowAddCustomer(false);
-                                    setNewCustomerName('');
-                                    setNewCustomerContact('');
-  }}
-  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl hover:bg-gray-300 transition-all duration-200 font-medium"
->
-  Cancel
-</button>
+                          onClick={() => {
+                            setShowAddCustomer(false);
+                            setNewCustomerName('');
+                            setNewCustomerContact('');
+                          }}
+                          className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl hover:bg-gray-300 transition-all duration-200 font-medium"
+                        >
+                          Cancel
+                        </button>
 
                       </div>
                     </div>
@@ -842,7 +840,7 @@ const receiptContent = `
                   {/* Available Services */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-gray-900">Available Services</h3>
-                    
+
                     <div className="relative">
                       <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                       <input
@@ -868,7 +866,7 @@ const receiptContent = `
                           >
                             <div className="font-medium text-gray-900">{service.name}</div>
                             <div className="text-lg font-bold text-green-600">
-                              ₹{Number(service.price).toFixed(2)}
+                              {formatCurrency(Number(service.price))}
                             </div>
                           </button>
                         ))
@@ -879,7 +877,7 @@ const receiptContent = `
                   {/* Selected Services */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-gray-900">Selected Services</h3>
-                    
+
                     <div className="space-y-3 max-h-80 overflow-y-auto">
                       {selectedServices.length === 0 ? (
                         <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-xl">
@@ -892,10 +890,10 @@ const receiptContent = `
                               <div className="flex-1">
                                 <div className="font-medium text-gray-900">{item.service_name}</div>
                                 <div className="text-green-600 font-bold">
-                                  ₹{item.price.toFixed(2)} each
+                                  {formatCurrency(item.price)} each
                                 </div>
                               </div>
-                              
+
                               <button
                                 onClick={() => removeService(item.service_id)}
                                 className="text-red-500 hover:text-red-700 p-1 hover:bg-red-100 rounded-lg transition-colors"
@@ -903,7 +901,7 @@ const receiptContent = `
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
-                            
+
                             <div className="flex items-center gap-4 mb-3">
                               <div className="flex items-center gap-2">
                                 <span className="text-sm text-gray-600">Qty:</span>
@@ -924,15 +922,14 @@ const receiptContent = `
                                 </div>
                               </div>
                             </div>
-                            
+
                             <div>
                               <label className="block text-sm text-gray-600 mb-1">Select Staff:</label>
                               <select
                                 value={item.staff_id || ''}
                                 onChange={(e) => updateServiceStaff(item.service_id, e.target.value)}
-                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 ${
-                                  !item.staff_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
-                                }`}
+                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 ${!item.staff_id ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                                  }`}
                               >
                                 <option value="">Select Staff</option>
                                 {staff.map((member) => (
@@ -945,65 +942,63 @@ const receiptContent = `
                                 <p className="text-xs text-red-600 mt-1">Staff assignment required</p>
                               )}
                             </div>
-                            
+
                             {/* Discount Section */}
-<div className="border-t border-gray-200 pt-3 mt-3">
-  <label className="block text-sm text-gray-600 mb-2">Service Discount (Optional):</label>
+                            <div className="border-t border-gray-200 pt-3 mt-3">
+                              <label className="block text-sm text-gray-600 mb-2">Service Discount (Optional):</label>
 
-  {/* Toggle Buttons */}
-  <div className="flex gap-2 mb-2">
-    <button
-      type="button"
-      onClick={() => updateServiceDiscount(item.service_id, 'percentage', item.discount_percentage || 0)}
-      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-        (item.discount_type || 'percentage') === 'percentage'
-          ? 'bg-green-600 text-white'
-          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-      }`}
-    >
-      Percentage (%)
-    </button>
-    <button
-      type="button"
-      onClick={() => updateServiceDiscount(item.service_id, 'amount', item.discount_amount || 0)}
-      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-        item.discount_type === 'amount'
-          ? 'bg-green-600 text-white'
-          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-      }`}
-    >
-      Fixed Amount (₹)
-    </button>
-  </div>
+                              {/* Toggle Buttons */}
+                              <div className="flex gap-2 mb-2">
+                                <button
+                                  type="button"
+                                  onClick={() => updateServiceDiscount(item.service_id, 'percentage', item.discount_percentage || 0)}
+                                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${(item.discount_type || 'percentage') === 'percentage'
+                                    ? 'bg-green-600 text-white'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                  Percentage (%)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateServiceDiscount(item.service_id, 'amount', item.discount_amount || 0)}
+                                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${item.discount_type === 'amount'
+                                    ? 'bg-green-600 text-white'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                  Fixed Amount (₹)
+                                </button>
+                              </div>
 
-  {/* Input Box */}
-  <input
-    type="number"
-    min="0"
-    max={item.discount_type === 'percentage' ? 100 : item.price}
-    step={item.discount_type === 'percentage' ? 1 : 0.01}
-    value={
-      item.discount_type === 'percentage'
-        ? (item.discount_percentage || 0)
-        : (item.discount_amount || 0)
-    }
-    onChange={(e) => {
-      const value = parseFloat(e.target.value) || 0;
-      updateServiceDiscount(item.service_id, item.discount_type || 'percentage', value);
-    }}
-    className="w-28 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-green-500"
-    placeholder={item.discount_type === 'percentage' ? '0%' : '₹0'}
-  />
+                              {/* Input Box */}
+                              <input
+                                type="number"
+                                min="0"
+                                max={item.discount_type === 'percentage' ? 100 : item.price}
+                                step={item.discount_type === 'percentage' ? 1 : 0.01}
+                                value={
+                                  item.discount_type === 'percentage'
+                                    ? (item.discount_percentage || 0)
+                                    : (item.discount_amount || 0)
+                                }
+                                onChange={(e) => {
+                                  const value = parseFloat(e.target.value) || 0;
+                                  updateServiceDiscount(item.service_id, item.discount_type || 'percentage', value);
+                                }}
+                                className="w-28 px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-green-500"
+                                placeholder={item.discount_type === 'percentage' ? '0%' : '₹0'}
+                              />
 
-  {/* Preview */}
-  <div className="text-xs text-gray-500 mt-1">
-    {item.discount_type === 'percentage' && item.discount_percentage
-      ? `₹${(item.price * item.discount_percentage / 100).toFixed(2)} off`
-      : item.discount_type === 'amount' && item.discount_amount
-      ? `${((item.discount_amount / item.price) * 100).toFixed(1)}% off`
-      : 'No discount'}
-  </div>
-</div>
+                              {/* Preview */}
+                              <div className="text-xs text-gray-500 mt-1">
+                                {item.discount_type === 'percentage' && item.discount_percentage
+                                  ? `${formatCurrency(item.price * item.discount_percentage / 100)} off`
+                                  : item.discount_type === 'amount' && item.discount_amount
+                                    ? `${((item.discount_amount / item.price) * 100).toFixed(1)}% off`
+                                    : 'No discount'}
+                              </div>
+                            </div>
 
 
 
@@ -1058,24 +1053,24 @@ const receiptContent = `
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Subtotal:</span>
-                        <span className="font-medium text-gray-900">₹{subtotal.toFixed(2)}</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(subtotal)}</span>
                       </div>
                       {serviceDiscountTotal > 0 && (
                         <div className="flex justify-between">
                           <span className="text-red-600">Service Discounts:</span>
-                          <span className="font-medium text-red-600">-₹{serviceDiscountTotal.toFixed(2)}</span>
+                          <span className="font-medium text-red-600">-{formatCurrency(serviceDiscountTotal)}</span>
                         </div>
                       )}
                       {overallDiscountAmount > 0 && (
                         <div className="flex justify-between">
                           <span className="text-red-600">Overall Discount:</span>
-                          <span className="font-medium text-red-600">-₹{overallDiscountAmount.toFixed(2)}</span>
+                          <span className="font-medium text-red-600">-{formatCurrency(overallDiscountAmount)}</span>
                         </div>
                       )}
                       <div className="border-t border-green-200 pt-3 mt-3">
                         <div className="flex justify-between">
                           <span className="text-lg font-bold text-green-800">Total:</span>
-                          <span className="text-lg font-bold text-green-600">₹{finalTotal.toFixed(2)}</span>
+                          <span className="text-lg font-bold text-green-600">{formatCurrency(finalTotal)}</span>
                         </div>
                       </div>
                     </div>
@@ -1091,11 +1086,10 @@ const receiptContent = `
                         key={mode}
                         type="button"
                         onClick={() => setPaymentMode(mode)}
-                        className={`px-4 py-3 rounded-xl font-semibold transition-all duration-300 capitalize smooth-transition ${
-                          paymentMode === mode
-                            ? 'bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-lg scale-105'
-                            : 'bg-white text-gray-700 hover:bg-slate-50 border border-gray-300 hover:shadow-md hover:scale-102'
-                        }`}
+                        className={`px-4 py-3 rounded-xl font-semibold transition-all duration-300 capitalize smooth-transition ${paymentMode === mode
+                          ? 'bg-gradient-to-r from-slate-600 to-slate-700 text-white shadow-lg scale-105'
+                          : 'bg-white text-gray-700 hover:bg-slate-50 border border-gray-300 hover:shadow-md hover:scale-102'
+                          }`}
                       >
                         {mode}
                       </button>
@@ -1113,28 +1107,26 @@ const receiptContent = `
                         <button
                           type="button"
                           onClick={() => setOverallDiscount({ type: 'percentage', value: 0 })}
-                          className={`px-4 py-2 rounded-xl font-semibold transition-all duration-300 smooth-transition ${
-                            overallDiscount.type === 'percentage'
-                              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg scale-105'
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-102'
-                          }`}
+                          className={`px-4 py-2 rounded-xl font-semibold transition-all duration-300 smooth-transition ${overallDiscount.type === 'percentage'
+                            ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg scale-105'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-102'
+                            }`}
                         >
                           Percentage (%)
                         </button>
                         <button
                           type="button"
                           onClick={() => setOverallDiscount({ type: 'amount', value: 0 })}
-                          className={`px-4 py-2 rounded-xl font-semibold transition-all duration-300 smooth-transition ${
-                            overallDiscount.type === 'amount'
-                              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg scale-105'
-                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-102'
-                          }`}
+                          className={`px-4 py-2 rounded-xl font-semibold transition-all duration-300 smooth-transition ${overallDiscount.type === 'amount'
+                            ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg scale-105'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-102'
+                            }`}
                         >
                           Fixed Amount (₹)
                         </button>
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm text-gray-600 mb-1">
@@ -1146,9 +1138,9 @@ const receiptContent = `
                           max={overallDiscount.type === 'percentage' ? 100 : subtotalAfterServiceDiscounts}
                           step={overallDiscount.type === 'percentage' ? 1 : 0.01}
                           value={overallDiscount.value}
-                          onChange={(e) => setOverallDiscount({ 
-                            ...overallDiscount, 
-                            value: parseFloat(e.target.value) || 0 
+                          onChange={(e) => setOverallDiscount({
+                            ...overallDiscount,
+                            value: parseFloat(e.target.value) || 0
                           })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
                           placeholder="0"
@@ -1157,25 +1149,25 @@ const receiptContent = `
                       <div>
                         <label className="block text-sm text-gray-600 mb-1">Discount Amount:</label>
                         <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 font-medium">
-                          ₹{overallDiscountAmount.toFixed(2)}
+                          {formatCurrency(overallDiscountAmount)}
                         </div>
                       </div>
                     </div>
                     {overallDiscountAmount > 0 && (
                       <div className="mt-3 p-3 bg-white rounded-lg border border-yellow-300">
                         <div className="text-sm text-gray-700">
-                          <span className="font-medium">Preview:</span> 
-                          <span className="ml-2">Subtotal: ₹{subtotal.toFixed(2)}</span>
+                          <span className="font-medium">Preview:</span>
+                          <span className="ml-2">Subtotal: {formatCurrency(subtotal)}</span>
                           {serviceDiscountTotal > 0 && (
                             <>
                               <span className="mx-2">-</span>
-                              <span className="text-orange-600">Service Discounts: ₹{serviceDiscountTotal.toFixed(2)}</span>
+                              <span className="text-orange-600">Service Discounts: {formatCurrency(serviceDiscountTotal)}</span>
                             </>
                           )}
                           <span className="mx-2">-</span>
-                          <span className="text-red-600">Overall Discount: ₹{overallDiscountAmount.toFixed(2)}</span>
+                          <span className="text-red-600">Overall Discount: {formatCurrency(overallDiscountAmount)}</span>
                           <span className="mx-2">=</span>
-                          <span className="font-bold text-green-600">Final: ₹{finalTotal.toFixed(2)}</span>
+                          <span className="font-bold text-green-600">Final: {formatCurrency(finalTotal)}</span>
                         </div>
                       </div>
                     )}
@@ -1196,9 +1188,9 @@ const receiptContent = `
                             </div>
                             {(item.discount_percentage || item.discount_amount) && (
                               <div className="text-xs text-orange-600 font-medium">
-                                Service discount: {item.discount_type === 'percentage' 
-                                  ? `${item.discount_percentage}% off` 
-                                  : `₹${item.discount_amount} off`}
+                                Service discount: {item.discount_type === 'percentage'
+                                  ? `${item.discount_percentage}% off`
+                                  : `${formatCurrency(item.discount_amount)} off`}
                               </div>
                             )}
                           </div>
@@ -1206,22 +1198,22 @@ const receiptContent = `
                             {(item.discount_percentage || item.discount_amount) ? (
                               <>
                                 <div className="font-bold text-green-600">
-                                  ₹{(getServiceDiscountedPrice(item) * item.quantity).toFixed(2)}
+                                  {formatCurrency(getServiceDiscountedPrice(item) * item.quantity)}
                                 </div>
                                 <div className="text-sm text-gray-500 line-through">
-                                  ₹{(item.price * item.quantity).toFixed(2)}
+                                  {formatCurrency(item.price * item.quantity)}
                                 </div>
                                 <div className="text-xs text-gray-500">
-                                  ₹{getServiceDiscountedPrice(item).toFixed(2)} × {item.quantity}
+                                  {formatCurrency(getServiceDiscountedPrice(item))} × {item.quantity}
                                 </div>
                               </>
                             ) : (
                               <>
                                 <div className="font-bold text-green-600">
-                                  ₹{(item.price * item.quantity).toFixed(2)}
+                                  {formatCurrency(item.price * item.quantity)}
                                 </div>
                                 <div className="text-sm text-gray-500">
-                                  ₹{item.price.toFixed(2)} × {item.quantity}
+                                  {formatCurrency(item.price)} × {item.quantity}
                                 </div>
                               </>
                             )}
@@ -1239,11 +1231,10 @@ const receiptContent = `
               <button
                 onClick={prevStep}
                 disabled={currentStep === 1}
-                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 smooth-transition ${
-                  currentStep === 1
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-gray-200 to-gray-300 text-gray-700 hover:from-gray-300 hover:to-gray-400 shadow-md hover:shadow-lg hover:scale-105'
-                }`}
+                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 smooth-transition ${currentStep === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-gray-200 to-gray-300 text-gray-700 hover:from-gray-300 hover:to-gray-400 shadow-md hover:shadow-lg hover:scale-105'
+                  }`}
               >
                 <ArrowLeft className="w-5 h-5" />
                 Back
@@ -1256,12 +1247,11 @@ const receiptContent = `
                     (currentStep === 1 && !canProceedFromStep1) ||
                     (currentStep === 2 && !canProceedFromStep2)
                   }
-                  className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 smooth-transition ${
-                    (currentStep === 1 && !canProceedFromStep1) ||
+                  className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 smooth-transition ${(currentStep === 1 && !canProceedFromStep1) ||
                     (currentStep === 2 && !canProceedFromStep2)
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/40 hover:shadow-xl hover:scale-105'
-                  }`}
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/40 hover:shadow-xl hover:scale-105'
+                    }`}
                 >
                   Next
                   <ArrowRight className="w-5 h-5" />
@@ -1294,7 +1284,7 @@ const receiptContent = `
             {currentStep === 2 && !canProceedFromStep2 && (
               <div className="mt-4 p-3 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl shadow-sm">
                 <p className="text-sm text-amber-800 font-medium">
-                  {selectedServices.length === 0 
+                  {selectedServices.length === 0
                     ? 'Please add at least one service to continue'
                     : 'Please assign staff to all services to continue'
                   }
@@ -1330,22 +1320,22 @@ const receiptContent = `
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal:</span>
-                    <span className="font-medium text-gray-900">₹{completedSale.subtotal.toFixed(2)}</span>
+                    <span className="font-medium text-gray-900">{formatCurrency(completedSale.subtotal)}</span>
                   </div>
                   {(completedSale.serviceDiscountTotal > 0 || completedSale.overallDiscountAmount > 0) && (
                     <div className="flex justify-between text-red-600">
                       <span>Total Discounts:</span>
-                      <span>-₹{(completedSale.serviceDiscountTotal + completedSale.overallDiscountAmount).toFixed(2)}</span>
+                      <span>-{formatCurrency(completedSale.serviceDiscountTotal + completedSale.overallDiscountAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-lg font-bold text-green-600 pt-2 border-t border-gray-200">
                     <span>Final Total:</span>
-                    <span>₹{completedSale.finalTotal.toFixed(2)}</span>
+                    <span>{formatCurrency(completedSale.finalTotal)}</span>
                   </div>
                 </div>
               </div>
 
-            
+
 
               <div className="space-y-3">
                 <button
@@ -1355,7 +1345,7 @@ const receiptContent = `
                   <FileText className="w-5 h-5" />
                   PRINT RECEIPT
                 </button>
-                
+
                 <button
                   onClick={resetPOS}
                   className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-2xl font-semibold hover:from-green-700 hover:to-green-800 transition-all duration-300 smooth-transition flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-105"

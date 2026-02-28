@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Calendar, Trophy, Target, DollarSign } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatCurrency } from '../../utils/format';
 
 interface StaffStats {
   staff_name: string;
@@ -80,10 +81,10 @@ const StaffPerformance: React.FC = () => {
       // Group by staff
       const staffStats = (salesData || []).reduce((acc, sale) => {
         const staffName = sale.staff?.name || 'Unknown Staff';
-        
+
         if (!acc[staffName]) {
-          acc[staffName] = { 
-            total_sales: 0, 
+          acc[staffName] = {
+            total_sales: 0,
             total_revenue: 0
           };
         }
@@ -115,7 +116,7 @@ const StaffPerformance: React.FC = () => {
   };
 
   const maxValue = Math.max(
-    ...staffData.map(s => sortBy === 'sales' ? s.total_sales : s.total_revenue), 
+    ...staffData.map(s => sortBy === 'sales' ? s.total_sales : s.total_revenue),
     1
   );
 
@@ -160,22 +161,21 @@ const StaffPerformance: React.FC = () => {
               <Calendar className="w-5 h-5 text-gray-400" />
               <span className="font-medium text-gray-700">Period:</span>
             </div>
-            
+
             <div className="flex gap-2">
               {['day', 'week', 'month', 'quarter', 'custom'].map((range) => (
                 <button
                   key={range}
                   onClick={() => setDateRange(range)}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                    dateRange === range
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${dateRange === range
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   {range === 'day' ? 'Today' :
-                   range === 'week' ? 'Week' : 
-                   range === 'month' ? 'Month' : 
-                   range === 'quarter' ? 'Quarter' : 'Custom'}
+                    range === 'week' ? 'Week' :
+                      range === 'month' ? 'Month' :
+                        range === 'quarter' ? 'Quarter' : 'Custom'}
                 </button>
               ))}
             </div>
@@ -226,43 +226,41 @@ const StaffPerformance: React.FC = () => {
               staffData.map((staff, index) => {
                 const value = sortBy === 'sales' ? staff.total_sales : staff.total_revenue;
                 const percentage = (value / maxValue) * 100;
-                
+
                 return (
                   <div key={staff.staff_name} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                          index === 0 ? 'bg-gold-100 text-yellow-800 border-2 border-yellow-300' :
-                          index === 1 ? 'bg-gray-100 text-gray-800 border-2 border-gray-300' :
-                          index === 2 ? 'bg-orange-100 text-orange-800 border-2 border-orange-300' :
-                          'bg-purple-100 text-purple-800'
-                        }`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${index === 0 ? 'bg-gold-100 text-yellow-800 border-2 border-yellow-300' :
+                            index === 1 ? 'bg-gray-100 text-gray-800 border-2 border-gray-300' :
+                              index === 2 ? 'bg-orange-100 text-orange-800 border-2 border-orange-300' :
+                                'bg-purple-100 text-purple-800'
+                          }`}>
                           {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                         </div>
                         <div>
                           <div className="font-medium text-gray-900">{staff.staff_name}</div>
                           <div className="text-sm text-gray-500">
-                            Avg: ₹{staff.average_sale_value.toFixed(2)} per sale
+                            Avg: {formatCurrency(staff.average_sale_value)} per sale
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-purple-600">
-                          {sortBy === 'sales' ? `${staff.total_sales} sales` : `₹${staff.total_revenue.toFixed(2)}`}
+                          {sortBy === 'sales' ? `${staff.total_sales} sales` : formatCurrency(staff.total_revenue)}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {sortBy === 'sales' ? `₹${staff.total_revenue.toFixed(2)}` : `${staff.total_sales} sales`}
+                          {sortBy === 'sales' ? formatCurrency(staff.total_revenue) : `${staff.total_sales} sales`}
                         </div>
                       </div>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-3">
                       <div
-                        className={`h-3 rounded-full transition-all duration-500 ${
-                          index === 0 ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' :
-                          index === 1 ? 'bg-gradient-to-r from-gray-400 to-gray-600' :
-                          index === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-600' :
-                          'bg-gradient-to-r from-purple-400 to-purple-600'
-                        }`}
+                        className={`h-3 rounded-full transition-all duration-500 ${index === 0 ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' :
+                            index === 1 ? 'bg-gradient-to-r from-gray-400 to-gray-600' :
+                              index === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-600' :
+                                'bg-gradient-to-r from-purple-400 to-purple-600'
+                          }`}
                         style={{ width: `${percentage}%` }}
                       ></div>
                     </div>
@@ -286,7 +284,7 @@ const StaffPerformance: React.FC = () => {
               <div className="space-y-2">
                 <div className="text-xl font-bold text-gray-900">{staffData[0].staff_name}</div>
                 <div className="text-green-600 font-semibold">
-                  ₹{staffData[0].total_revenue.toFixed(2)}
+                  {formatCurrency(staffData[0].total_revenue)}
                 </div>
                 <div className="text-sm text-gray-500">{staffData[0].total_sales} sales</div>
               </div>
@@ -302,7 +300,7 @@ const StaffPerformance: React.FC = () => {
             </div>
             <div className="space-y-2">
               <div className="text-xl font-bold text-gray-900">
-                ₹{staffData.length > 0 ? (staffData.reduce((sum, s) => sum + s.total_revenue, 0) / staffData.length).toFixed(2) : '0.00'}
+                {staffData.length > 0 ? formatCurrency(staffData.reduce((sum, s) => sum + s.total_revenue, 0) / staffData.length) : formatCurrency(0)}
               </div>
               <div className="text-blue-600 font-semibold">per staff member</div>
               <div className="text-sm text-gray-500">
@@ -320,7 +318,7 @@ const StaffPerformance: React.FC = () => {
             </div>
             <div className="space-y-2">
               <div className="text-xl font-bold text-gray-900">
-                ₹{staffData.length > 0 ? Math.max(...staffData.map(s => s.average_sale_value)).toFixed(2) : '0.00'}
+                {staffData.length > 0 ? formatCurrency(Math.max(...staffData.map(s => s.average_sale_value))) : formatCurrency(0)}
               </div>
               <div className="text-orange-600 font-semibold">highest average</div>
               <div className="text-sm text-gray-500">

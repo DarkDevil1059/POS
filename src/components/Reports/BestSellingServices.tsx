@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Award, Calendar, TrendingUp, DollarSign } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatCurrency } from '../../utils/format';
 
 interface ServiceStats {
   service_name: string;
@@ -81,10 +82,10 @@ const BestSellingServices: React.FC = () => {
       const serviceStats = (salesData || []).reduce((acc, sale) => {
         const serviceName = sale.services?.name || 'Unknown Service';
         const servicePrice = sale.services?.price || 0;
-        
+
         if (!acc[serviceName]) {
-          acc[serviceName] = { 
-            total_sales: 0, 
+          acc[serviceName] = {
+            total_sales: 0,
             total_revenue: 0,
             service_price: servicePrice
           };
@@ -116,7 +117,7 @@ const BestSellingServices: React.FC = () => {
   };
 
   const maxValue = Math.max(
-    ...servicesData.map(s => sortBy === 'sales' ? s.total_sales : s.total_revenue), 
+    ...servicesData.map(s => sortBy === 'sales' ? s.total_sales : s.total_revenue),
     1
   );
 
@@ -161,22 +162,21 @@ const BestSellingServices: React.FC = () => {
               <Calendar className="w-5 h-5 text-gray-400" />
               <span className="font-medium text-gray-700">Period:</span>
             </div>
-            
+
             <div className="flex gap-2">
               {['day', 'week', 'month', 'quarter', 'custom'].map((range) => (
                 <button
                   key={range}
                   onClick={() => setDateRange(range)}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                    dateRange === range
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${dateRange === range
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   {range === 'day' ? 'Today' :
-                   range === 'week' ? 'Week' : 
-                   range === 'month' ? 'Month' : 
-                   range === 'quarter' ? 'Quarter' : 'Custom'}
+                    range === 'week' ? 'Week' :
+                      range === 'month' ? 'Month' :
+                        range === 'quarter' ? 'Quarter' : 'Custom'}
                 </button>
               ))}
             </div>
@@ -227,41 +227,39 @@ const BestSellingServices: React.FC = () => {
               servicesData.map((service, index) => {
                 const value = sortBy === 'sales' ? service.total_sales : service.total_revenue;
                 const percentage = (value / maxValue) * 100;
-                
+
                 return (
                   <div key={service.service_name} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                          index === 0 ? 'bg-yellow-100 text-yellow-800' :
-                          index === 1 ? 'bg-gray-100 text-gray-800' :
-                          index === 2 ? 'bg-orange-100 text-orange-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${index === 0 ? 'bg-yellow-100 text-yellow-800' :
+                            index === 1 ? 'bg-gray-100 text-gray-800' :
+                              index === 2 ? 'bg-orange-100 text-orange-800' :
+                                'bg-green-100 text-green-800'
+                          }`}>
                           {index + 1}
                         </div>
                         <div>
                           <div className="font-medium text-gray-900">{service.service_name}</div>
-                          <div className="text-sm text-gray-500">₹{service.service_price.toFixed(2)} per service</div>
+                          <div className="text-sm text-gray-500">{formatCurrency(service.service_price)} per service</div>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-green-600">
-                          {sortBy === 'sales' ? `${service.total_sales} sales` : `₹${service.total_revenue.toFixed(2)}`}
+                          {sortBy === 'sales' ? `${service.total_sales} sales` : formatCurrency(service.total_revenue)}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {sortBy === 'sales' ? `₹${service.total_revenue.toFixed(2)}` : `${service.total_sales} sales`}
+                          {sortBy === 'sales' ? formatCurrency(service.total_revenue) : `${service.total_sales} sales`}
                         </div>
                       </div>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className={`h-2 rounded-full transition-all duration-500 ${
-                          index === 0 ? 'bg-yellow-500' :
-                          index === 1 ? 'bg-gray-500' :
-                          index === 2 ? 'bg-orange-500' :
-                          'bg-green-500'
-                        }`}
+                        className={`h-2 rounded-full transition-all duration-500 ${index === 0 ? 'bg-yellow-500' :
+                            index === 1 ? 'bg-gray-500' :
+                              index === 2 ? 'bg-orange-500' :
+                                'bg-green-500'
+                          }`}
                         style={{ width: `${percentage}%` }}
                       ></div>
                     </div>
@@ -285,13 +283,13 @@ const BestSellingServices: React.FC = () => {
               <div className="space-y-2">
                 <div className="text-2xl font-bold text-gray-900">{servicesData[0].service_name}</div>
                 <div className="text-green-600 font-semibold">
-                  {sortBy === 'sales' 
-                    ? `${servicesData[0].total_sales} sales` 
-                    : `₹${servicesData[0].total_revenue.toFixed(2)} revenue`}
+                  {sortBy === 'sales'
+                    ? `${servicesData[0].total_sales} sales`
+                    : `${formatCurrency(servicesData[0].total_revenue)} revenue`}
                 </div>
                 <div className="text-sm text-gray-500">
-                  {sortBy === 'sales' 
-                    ? `₹${servicesData[0].total_revenue.toFixed(2)} total revenue` 
+                  {sortBy === 'sales'
+                    ? `${formatCurrency(servicesData[0].total_revenue)} total revenue`
                     : `${servicesData[0].total_sales} total sales`}
                 </div>
               </div>
@@ -313,19 +311,19 @@ const BestSellingServices: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-gray-600">Most Expensive:</span>
                 <span className="font-semibold">
-                  ₹{Math.max(...servicesData.map(s => s.service_price), 0).toFixed(2)}
+                  {formatCurrency(Math.max(...servicesData.map(s => s.service_price), 0))}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Least Expensive:</span>
                 <span className="font-semibold">
-                  ₹{servicesData.length > 0 ? Math.min(...servicesData.map(s => s.service_price)).toFixed(2) : '0.00'}
+                  {servicesData.length > 0 ? formatCurrency(Math.min(...servicesData.map(s => s.service_price))) : formatCurrency(0)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Average Price:</span>
                 <span className="font-semibold">
-                  ₹{servicesData.length > 0 ? (servicesData.reduce((sum, s) => sum + s.service_price, 0) / servicesData.length).toFixed(2) : '0.00'}
+                  {servicesData.length > 0 ? formatCurrency(servicesData.reduce((sum, s) => sum + s.service_price, 0) / servicesData.length) : formatCurrency(0)}
                 </span>
               </div>
             </div>
