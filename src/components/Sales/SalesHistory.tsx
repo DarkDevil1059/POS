@@ -442,6 +442,8 @@ const SalesHistory: React.FC = () => {
         `;
       }).join("");
 
+      const hasLogo = settings?.show_logo !== false && !!settings?.shop_logo_url;
+
       const receiptContent = `
   <!DOCTYPE html>
   <html lang="en">
@@ -469,10 +471,10 @@ const SalesHistory: React.FC = () => {
       .footer { margin-top: 12px; font-size: 12px; text-align: center; }
     </style>
   </head>
-  <body onload="window.print()">
+  <body>
     <div class="receipt">
       <div class="center">
-        ${settings?.show_logo !== false && settings?.shop_logo_url ? `<img src="${settings.shop_logo_url}" alt="Logo" class="logo" />` : ''}
+        ${hasLogo ? `<img id="shop-logo" src="${settings.shop_logo_url}" alt="Logo" class="logo" />` : ''}
         ${settings?.show_shop_name !== false ? `<div class="shop-name">${(settings?.shop_name || 'POS SYSTEM').toUpperCase()}</div>` : ''}
         ${settings?.address ? `<div class="shop-info">${settings.address}</div>` : ''}
         ${settings?.contact_number ? `<div class="shop-info">Tel: ${settings.contact_number}</div>` : ''}
@@ -525,6 +527,33 @@ const SalesHistory: React.FC = () => {
       printWindow.document.write(receiptContent);
       printWindow.document.close();
       printWindow.focus();
+
+      const triggerPrint = () => {
+        printWindow.print();
+      };
+
+      if (hasLogo) {
+        // Wait for logo image to load before printing
+        const logoImg = printWindow.document.getElementById('shop-logo') as HTMLImageElement | null;
+        if (logoImg && !logoImg.complete) {
+          logoImg.onload = triggerPrint;
+          logoImg.onerror = triggerPrint; // still print even if logo fails to load
+          // Fallback in case onload never fires
+          setTimeout(triggerPrint, 2000);
+        } else {
+          // Logo already cached/loaded
+          printWindow.onload ? triggerPrint() : (printWindow.onload = triggerPrint);
+          setTimeout(triggerPrint, 300);
+        }
+      } else {
+        // No logo — print as soon as window is ready
+        if (printWindow.document.readyState === 'complete') {
+          triggerPrint();
+        } else {
+          printWindow.onload = triggerPrint;
+          setTimeout(triggerPrint, 300);
+        }
+      }
 
     } catch (error) {
       console.error('Error printing receipt:', error);
