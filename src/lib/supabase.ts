@@ -1,3 +1,3 @@
-export const supabaseUrl = 'https://pos.jiobase.com';
+export const supabaseUrl = 'https://wojwajxyqlrrmiukhrfo.supabase.co';
 export const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indvandhanh5cWxycm1pdWtocmZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0MDMzODksImV4cCI6MjA3MTk3OTM4OX0.6p0-3oA7rcAKbqn5SusHgnqrQJYiItOlRiIxPO0-pIM';
 export const supabaseServiceRoleKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indvandhanh5cWxycm1pdWtocmZvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjQwMzM4OSwiZXhwIjoyMDcxOTc5Mzg5fQ.0RLvezlIaLcw_r32-R4_6_g943O6QnOQusO_vxxQcjU';
