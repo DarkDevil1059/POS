@@ -475,11 +475,11 @@ const POSScreen: React.FC = () => {
 
         return `
         <tr>
-          <td>{item.service_name || ""}</td>
-          <td>{formatCurrency(item.price || 0)}</td>
-          <td>{item.quantity || 0}</td>
-          <td>{formatCurrency(discountShown)}</td>
-          <td>{formatCurrency(lineTotal)}</td>
+          <td>${item.service_name || ""}</td>
+          <td>${formatCurrency(item.price || 0)}</td>
+          <td>${item.quantity || 0}</td>
+          <td>${formatCurrency(discountShown)}</td>
+          <td>${formatCurrency(lineTotal)}</td>
         </tr>
       `;
       }).join("");
