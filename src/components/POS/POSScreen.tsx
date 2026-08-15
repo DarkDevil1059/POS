@@ -940,7 +940,21 @@ const POSScreen: React.FC = () => {
                                   >
                                     <Minus className="w-4 h-4" />
                                   </button>
-                                  <span className="w-8 text-center font-medium">{item.quantity}</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      if (!isNaN(val)) updateServiceQuantity(item.service_id, val);
+                                    }}
+                                    onBlur={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      if (isNaN(val) || val < 1) updateServiceQuantity(item.service_id, 1);
+                                    }}
+                                    style={{ MozAppearance: 'textfield' } as React.CSSProperties}
+                                    className="w-12 text-center font-medium border border-gray-300 rounded-lg py-1 focus:ring-2 focus:ring-green-500 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  />
                                   <button
                                     onClick={() => updateServiceQuantity(item.service_id, item.quantity + 1)}
                                     className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-colors"
