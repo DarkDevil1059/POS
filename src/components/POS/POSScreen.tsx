@@ -49,10 +49,11 @@ const POSScreen: React.FC = () => {
     };
   }, [supabaseClient]);
 
-  const fetchData = async () => {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) return;
-
+  // Fetch every customer for the user, one page at a time.
+  // Sort by (name, id): id is the unique tiebreaker that keeps .range()
+  // pagination stable when many rows share the same name. Without it,
+  // tied rows land on more than one page and get fetched twice.
+  const fetchAllCustomers = async (userId: string): Promise<Customer[]> => {
     let allCustomers: Customer[] = [];
     let from = 0;
     const PAGE_SIZE = 1000;
@@ -61,8 +62,9 @@ const POSScreen: React.FC = () => {
       const { data, error } = await supabaseClient
         .from('customers')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('name')
+        .order('id')
         .range(from, from + PAGE_SIZE - 1);
 
       if (error) {
@@ -79,7 +81,16 @@ const POSScreen: React.FC = () => {
       from += PAGE_SIZE;
     }
 
-    setCustomers(allCustomers);
+    // Drop any row that still slipped through twice, so customer.id
+    // stays unique and React list keys never collide.
+    return Array.from(new Map(allCustomers.map(c => [c.id, c])).values());
+  };
+
+  const fetchData = async () => {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return;
+
+    setCustomers(await fetchAllCustomers(user.id));
 
     // Fetch staff
     const { data: staffData, error: staffError } = await supabaseClient
@@ -115,15 +126,7 @@ const POSScreen: React.FC = () => {
       const { data: { user } } = await supabaseClient.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const { data, error } = await supabaseClient
-        .from('customers')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('name')
-
-
-      if (error) throw error;
-      if (data) setCustomers(data);
+      setCustomers(await fetchAllCustomers(user.id));
     } catch (error) {
       console.error('Error refetching customers:', error);
     }
